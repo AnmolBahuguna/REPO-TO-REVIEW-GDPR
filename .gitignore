@@ -1,0 +1,20 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.venv-*/
+venv/
+.env
+*.tsbuildinfo
+
+# Node
+node_modules/
+frontend/dist/
+frontend/.vite/
+
+# Trained model artifacts
+backend/artifacts/
+
+# OS
+.DS_Store
+Thumbs.db
