@@ -309,3 +309,68 @@ def _python_analysis(file_path: str, source: str, jurisdictions: list[str]) -> t
             add("API.UNGUARDED_PERSONAL_ROUTE", function, jurisdiction)
         if BROAD_QUERY_RE.search(body) or re.search(r"\breturn\b.+\.(?:all|find|fetchall)\s*\(", body, re.I | re.S):
             add("API.BROAD_DATA_RESPONSE", function, "General security review")
+        if re.search(r"(?i)\b(?:export|download|dump|bulk)\b", body) and (
+            BROAD_QUERY_RE.search(body) or re.search(r"\.(?:all|findAll|fetchall)\s*\(", body, re.I)
+        ):
+            add("PRIVACY.BULK_EXPORT", function, "General security review")
+        if re.search(r"tenant|organization|workspace", body, re.I) and not re.search(r"tenant_id|organization_id|workspace_id", body, re.I):
+            add("PRIVACY.CROSS_TENANT_QUERY", function, "General security review")
+
+    for node in ast.walk(root):
+        if isinstance(node, ast.Constant) and isinstance(node.value, str):
+            for label, pattern in PERSONAL_VALUE_PATTERNS.items():
+                match = pattern.search(node.value)
+                if match:
+                    for jurisdiction in jurisdictions:
+                        add(
+                            "PRIVACY.PERSONAL_DATA_FIELD",
+                            node,
+                            jurisdiction,
+                            confidence=0.86,
+                            reasoning=f"A source string contains a value shaped like a {label}. The value is redacted in the report; confirm whether it is real, synthetic, or a test fixture.",
+                            evidence_kind="literal_data_indicator",
+                        )
+
+    return findings, "parsed"
+
+
+def _tree_sitter_analysis(
+    language: str,
+    file_path: str,
+    source: str,
+    jurisdictions: list[str],
+) -> tuple[list[dict[str, Any]], str]:
+    parser: Parser = get_parser(language)
+    tree = parser.parse(source.encode("utf-8", errors="replace"))
+    if tree.root_node.has_error:
+        return [], "parse_error"
+
+    findings: list[dict[str, Any]] = []
+    seen: set[tuple[str, int, str]] = set()
+    source_bytes = source.encode("utf-8")
+    source_lines = source.splitlines()
+    line_starts: list[int] = []
+    offset = 0
+    for line in source_lines:
+        line_starts.append(offset)
+        offset += len(line) + 1
+
+    def add(rule_id: str, line: int, jurisdiction: str, **kwargs: Any) -> None:
+        key = (rule_id, line, jurisdiction)
+        if key in seen:
+            return
+        seen.add(key)
+        if not 1 <= line <= len(source_lines):
+            return
+        start = line_starts[line - 1]
+        findings.append(_finding(
+            rule_id, file_path, source, start, start + len(source_lines[line - 1]), jurisdiction, **kwargs
+        ))
+
+    named_nodes: list[Any] = []
+    string_nodes: list[Any] = []
+    stack = [tree.root_node]
+    while stack:
+        node = stack.pop()
+        if node.child_count == 0 and node.type in {
+            "identifier", "property_identifier", "shorthand_property_identifier",
