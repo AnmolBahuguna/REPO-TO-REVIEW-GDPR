@@ -109,3 +109,68 @@ summary:focus-visible {
   position: relative;
   z-index: 1;
   max-width: 650px;
+}
+
+.eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  margin: 0 0 1rem;
+  color: #84cfc9;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+}
+
+.eyebrow-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--cyan);
+  box-shadow: 0 0 12px rgba(97, 223, 208, 0.8);
+}
+
+h1,
+h2,
+h3,
+h4 {
+  font-family: Manrope, 'Segoe UI', sans-serif;
+}
+
+h1 {
+  margin: 0;
+  color: #f2f7ff;
+  font-size: clamp(2.35rem, 5vw, 3.85rem);
+  font-weight: 700;
+  letter-spacing: -0.065em;
+  line-height: 1.13;
+}
+
+h1 span {
+  color: #8eabc5;
+}
+
+.hero-description {
+  max-width: 540px;
+  margin: 1.15rem 0 1.2rem;
+  color: #9caec2;
+  font-size: 0.96rem;
+  line-height: 1.75;
+}
+
+.jurisdiction-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+}
+
+.jurisdiction-tags span {
+  border: 1px solid rgba(101, 170, 180, 0.22);
+  border-radius: 999px;
+  padding: 0.35rem 0.7rem;
+  color: #b4d6d9;
+  background: rgba(26, 65, 76, 0.23);
+  font-size: 0.69rem;
+}
+
+.hero-art {
