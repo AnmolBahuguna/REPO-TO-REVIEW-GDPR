@@ -61,3 +61,69 @@ def extract_repo_details(repo_url: str) -> tuple[str, str]:
     if len(parts) != 2:
         raise ValueError("Repository URL must contain only an owner and repository name.")
 
+    owner, repo_name = parts
+    repo_name = repo_name.removesuffix(".git")
+    if not re.fullmatch(r"[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})", owner):
+        raise ValueError("The GitHub repository owner is invalid.")
+    if not re.fullmatch(r"[A-Za-z0-9_.-]{1,100}", repo_name) or repo_name in {".", ".."}:
+        raise ValueError("The GitHub repository name is invalid.")
+    return owner, repo_name
+
+
+def normalize_jurisdictions(jurisdictions: list[str] | None) -> list[str]:
+    items = ["UK GDPR", "India DPDP"] if jurisdictions is None else jurisdictions
+    aliases = {
+        "uk gdpr": "UK GDPR",
+        "uk_gdpr": "UK GDPR",
+        "india dpdp": "India DPDP",
+        "india_dpdp": "India DPDP",
+    }
+    names: list[str] = []
+    for item in items:
+        normalized = str(item).strip().lower()
+        if normalized not in aliases:
+            raise ValueError(f"Unsupported jurisdiction: {item}")
+        name = aliases[normalized]
+        if name not in names:
+            names.append(name)
+    if not names:
+        raise ValueError("Select at least one jurisdiction.")
+    return names
+
+
+def _github_headers() -> dict[str, str]:
+    headers = {
+        "Accept": "application/vnd.github+json",
+        "User-Agent": "code-to-gdpr-generator",
+        "X-GitHub-Api-Version": "2022-11-28",
+    }
+    token = os.getenv("GITHUB_TOKEN")
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    return headers
+
+
+def fetch_json(client: httpx.Client, url: str) -> dict[str, Any]:
+    response = client.get(url)
+    response.raise_for_status()
+    payload = response.json()
+    if not isinstance(payload, dict):
+        raise ValueError("GitHub API returned an unexpected response.")
+    return payload
+
+
+def fetch_text(client: httpx.Client, url: str) -> str:
+    response = client.get(url, headers={"Accept": "text/plain"})
+    response.raise_for_status()
+    if len(response.content) > MAX_FILE_SIZE_BYTES:
+        raise ValueError("Downloaded file exceeds the configured file-size limit.")
+    return response.text
+
+
+def _safe_repo_path(path: str) -> bool:
+    normalized = posixpath.normpath(path)
+    return (
+        bool(path)
+        and not path.startswith("/")
+        and normalized not in {".", ".."}
+        and not normalized.startswith("../")
