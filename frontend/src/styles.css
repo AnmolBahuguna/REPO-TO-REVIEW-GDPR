@@ -634,3 +634,68 @@ input::placeholder {
   border-radius: 9px;
   padding: 0.9rem 1rem;
   background: rgba(15, 31, 49, 0.72);
+}
+
+.summary-label {
+  display: block;
+  color: #8599ad;
+  font-size: 0.68rem;
+}
+
+.summary-card strong {
+  display: block;
+  margin-top: 0.4rem;
+  color: #e5eef8;
+  font-family: Manrope, 'Segoe UI', sans-serif;
+  font-size: 1.45rem;
+  letter-spacing: -0.045em;
+}
+
+.summary-card small {
+  display: block;
+  margin-top: 0.2rem;
+  color: #71869b;
+  font-size: 0.64rem;
+}
+
+.scan-metadata {
+  display: grid;
+  gap: 0.45rem;
+  margin-top: 0.75rem;
+  border: 1px solid rgba(145, 169, 195, 0.12);
+  border-radius: 7px;
+  padding: 0.75rem;
+  background: rgba(15, 31, 49, 0.4);
+}
+
+.status-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.status-summary span {
+  border: 1px solid rgba(145, 169, 195, 0.14);
+  border-radius: 99px;
+  padding: 0.25rem 0.5rem;
+  color: #a5b7c8;
+  font-size: 0.61rem;
+}
+
+.compliance-notice,
+.analysis-methods {
+  margin: 0;
+  color: #778da3;
+  font-size: 0.64rem;
+  line-height: 1.55;
+}
+
+.compliance-notice strong {
+  color: #aabdcf;
+}
+
+.unsupported-files summary {
+  width: fit-content;
+  color: #d8c483;
+  cursor: pointer;
+  font-size: 0.66rem;
