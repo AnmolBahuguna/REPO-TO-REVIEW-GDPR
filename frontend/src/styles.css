@@ -1421,3 +1421,69 @@ html[data-theme='dark'] .input-helper code { color: #a6d6d0; }
 html[data-theme='dark'] .example-repo { color: #76d5ca; }
 html[data-theme='dark'] .check-pill { border-color: rgba(145, 169, 195, .2); color: #aab9c8; background: rgba(3, 14, 26, .45); }
 html[data-theme='dark'] .check-pill.selected { border-color: rgba(105, 214, 200, .42); color: #c9eeea; background: rgba(37, 114, 112, .18); }
+html[data-theme='dark'] .check-indicator { border-color: #70879b; }
+html[data-theme='dark'] .selected .check-indicator, html[data-theme='dark'] .check-indicator.checked { border-color: #69d6c8; color: #09202a; background: #69d6c8; }
+html[data-theme='dark'] .ai-option { border-color: rgba(145, 169, 195, .15); background: rgba(5, 17, 29, .35); }
+html[data-theme='dark'] .ai-option .check-pill { background: rgba(3, 14, 26, .45); }
+html[data-theme='dark'] .ai-option p { color: #8da1b5; }
+html[data-theme='dark'] .form-footer { border-color: rgba(145, 169, 195, .12); }
+html[data-theme='dark'] .form-footer p { color: #91a4b8; }
+html[data-theme='dark'] .info-icon { border-color: #7891a6; }
+html[data-theme='dark'] .form-footer button { color: #062125; background: linear-gradient(115deg, #75e2d5, #64cde1); }
+html[data-theme='dark'] .form-footer button:hover:not(:disabled) { background: linear-gradient(115deg, #8beadd, #79d8e9); }
+html[data-theme='dark'] .spinner { border-color: rgba(9, 42, 47, .28); border-top-color: #092a2f; }
+html[data-theme='dark'] .disclaimer { border-color: rgba(99, 148, 184, .16); color: #9aaec0; background: rgba(15, 35, 54, .52); }
+html[data-theme='dark'] .disclaimer > span { color: #71cfc8; }
+html[data-theme='dark'] .disclaimer strong { color: #c4d5e2; }
+html[data-theme='dark'] .error-box { border-color: rgba(248, 113, 113, .35); color: #fecaca; background: rgba(127, 29, 29, .28); }
+html[data-theme='dark'] .loading-state { border-color: rgba(97, 223, 208, .22); color: #b8d9dc; background: rgba(27, 83, 91, .2); }
+html[data-theme='dark'] .loading-state .spinner { border-color: rgba(97, 223, 208, .22); border-top-color: #69d6c8; }
+html[data-theme='dark'] .results-heading h2 { color: #eef4fb; }
+html[data-theme='dark'] .results-heading .eyebrow { color: #83d1c7; }
+html[data-theme='dark'] .repo-link, html[data-theme='dark'] .clear-filter { color: #79d4cf; }
+html[data-theme='dark'] .button-secondary { border-color: rgba(145, 169, 195, .22); color: #c2d1df; background: rgba(18, 37, 58, .78); }
+html[data-theme='dark'] .button-secondary:hover { border-color: rgba(105, 214, 200, .5); color: #e2f7f4; background: #152b3e; }
+html[data-theme='dark'] .summary-card { border-color: rgba(148, 173, 201, .16); background: rgba(15, 31, 49, .8); box-shadow: none; }
+html[data-theme='dark'] .summary-label { color: #91a5b8; }
+html[data-theme='dark'] .summary-card strong { color: #e5eef8; }
+html[data-theme='dark'] .summary-card small { color: #8196aa; }
+html[data-theme='dark'] .scan-metadata { border-color: rgba(145, 169, 195, .14); background: rgba(15, 31, 49, .5); }
+html[data-theme='dark'] .status-summary span { border-color: rgba(145, 169, 195, .16); color: #b0c0cf; background: rgba(7, 19, 31, .5); }
+html[data-theme='dark'] .compliance-notice, html[data-theme='dark'] .analysis-methods { color: #8499ad; }
+html[data-theme='dark'] .compliance-notice strong { color: #b7c9d9; }
+html[data-theme='dark'] .unsupported-files summary { color: #d8c483; }
+html[data-theme='dark'] .unsupported-files ul { color: #aab8c4; }
+html[data-theme='dark'] .severity-card { border-color: rgba(148, 173, 201, .16); color: #b4c3d0; background: rgba(15, 31, 49, .72); }
+html[data-theme='dark'] .severity-card:hover { box-shadow: 0 5px 14px rgba(0, 0, 0, .16); }
+html[data-theme='dark'] .severity-card.active { background: rgba(24, 44, 62, .92); }
+html[data-theme='dark'] .severity-card strong { color: #e6edf5; }
+html[data-theme='dark'] .severity-card.critical { color: #f18a8a; }
+html[data-theme='dark'] .severity-card.high { color: #f2a56e; }
+html[data-theme='dark'] .severity-card.medium { color: #e8cb70; }
+html[data-theme='dark'] .severity-card.low { color: #75b1ef; }
+html[data-theme='dark'] .severity-dot.critical { background: #f16d76; }
+html[data-theme='dark'] .severity-dot.high { background: #e9954c; }
+html[data-theme='dark'] .severity-dot.medium { background: #dcc15a; }
+html[data-theme='dark'] .severity-dot.low { background: #6ca9e9; }
+html[data-theme='dark'] .warning-box { border-color: rgba(232, 196, 91, .2); color: #e4cf8d; background: rgba(94, 75, 24, .16); }
+html[data-theme='dark'] .warning-box ul { color: #c2b47e; }
+html[data-theme='dark'] .findings-heading h3 { color: #e6eef7; }
+html[data-theme='dark'] .findings-heading h3 span, html[data-theme='dark'] .findings-heading p { color: #8ca1b5; }
+html[data-theme='dark'] .finding-card { border-color: rgba(145, 169, 195, .16); background: rgba(13, 28, 46, .85); box-shadow: none; }
+html[data-theme='dark'] .finding-card h4 { color: #e2ebf5; }
+html[data-theme='dark'] .badge.critical { color: #ffb3b8; background: rgba(241, 109, 118, .14); }
+html[data-theme='dark'] .badge.high { color: #ffc08e; background: rgba(233, 149, 76, .14); }
+html[data-theme='dark'] .badge.medium { color: #ecd983; background: rgba(220, 193, 90, .14); }
+html[data-theme='dark'] .badge.low { color: #9bcaf7; background: rgba(108, 169, 233, .14); }
+html[data-theme='dark'] .category, html[data-theme='dark'] .jurisdiction { color: #9bb0c3; }
+html[data-theme='dark'] .finding-location { color: #91a6bb; }
+html[data-theme='dark'] .finding-location code, html[data-theme='dark'] .source-link { color: #9ed6d2; }
+html[data-theme='dark'] .source-link:hover { color: #c4f0e9; }
+html[data-theme='dark'] .legal-basis { color: #a1b3c4; }
+html[data-theme='dark'] .legal-reference { color: #91a6bb; }
+html[data-theme='dark'] .legal-reference a, html[data-theme='dark'] .legal-reference a:visited { color: #7fd4ce; }
+html[data-theme='dark'] .status-tag.potential_issue { color: #ffb3b8; }
+html[data-theme='dark'] .status-tag.requires_manual_review { color: #ecd983; }
+html[data-theme='dark'] .status-tag.no_issue_detected_by_rule { color: #8dd4bb; }
+html[data-theme='dark'] .evidence-details summary { color: #77cbc6; }
+html[data-theme='dark'] .evidence-details summary span { color: #8ca1b5; }
