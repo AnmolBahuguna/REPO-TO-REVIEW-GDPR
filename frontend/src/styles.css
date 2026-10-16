@@ -1093,3 +1093,69 @@ input::placeholder {
   height: 1px;
   padding: 0;
   margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+@media (max-width: 700px) {
+  .page-shell { padding: 0 1rem 1rem; }
+  .hero { min-height: auto; padding: 3rem 0 2.4rem; }
+  .hero-art { position: absolute; right: -4.8rem; opacity: 0.28; }
+  .hero-copy { max-width: 560px; }
+  .scan-panel { padding: 1.2rem; }
+  .jurisdiction-select { align-items: flex-start; flex-direction: column; }
+  .ai-option { align-items: flex-start; flex-direction: column; }
+  .summary-grid { grid-template-columns: 1fr 1fr; }
+  .generated-card { grid-column: 1 / -1; }
+}
+
+@media (max-width: 480px) {
+  .topbar { height: 63px; }
+  .topbar-note { max-width: 130px; text-align: right; font-size: 0.65rem; }
+  h1 { font-size: clamp(2.15rem, 10vw, 2.75rem); }
+  .hero-description { font-size: 0.86rem; }
+  .panel-heading { align-items: flex-start; flex-direction: column; gap: 0.35rem; }
+  .form-footer,
+  .ai-option,
+  .results-heading,
+  .findings-heading { align-items: stretch; flex-direction: column; }
+  .form-footer button { width: 100%; }
+  .result-actions { width: 100%; }
+  .result-actions button { flex: 1; }
+  .severity-grid { grid-template-columns: 1fr 1fr; }
+  .findings-heading { gap: 0.75rem; }
+  .finding-filters { align-items: stretch; flex-direction: column; }
+  .finding-filters input { width: 100%; }
+  .clear-filter { align-self: flex-start; }
+  .footer { flex-direction: column; }
+}
+
+@media print {
+  :root,
+  body { color: #111827; background: white; }
+  .page-shell { padding: 0; }
+  .container { width: 100%; }
+  .topbar,
+  .hero,
+  .scan-panel,
+  .disclaimer,
+  .error-box,
+  .loading-state,
+  .result-actions,
+  .severity-grid,
+  .finding-filters,
+  .footer,
+  .evidence-details summary { display: none !important; }
+  .results { margin: 0; }
+  .results-heading h2,
+  .repo-link,
+  .summary-card strong,
+  .finding-card h4,
+  .recommendation,
+  .legal-basis { color: #111827; }
+  .summary-grid { grid-template-columns: repeat(3, 1fr); }
+  .summary-card,
+  .finding-card,
+  .empty-state { break-inside: avoid; box-shadow: none; background: white; border: 1px solid #cbd5e1; }
