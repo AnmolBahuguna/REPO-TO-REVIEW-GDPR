@@ -324,3 +324,68 @@ def analyze_repository(repo_url: str, jurisdictions: list[str] | None = None) ->
         if status == "parse_error":
             parse_errors.append(path)
             continue
+        findings.extend(file_findings)
+
+    findings.extend(_semgrep_findings(fetched_sources, selected_jurisdictions, warnings))
+    if parse_errors:
+        add_warning(f"{len(parse_errors)} supported files could not be parsed and were not analyzed.")
+
+    # Repository-level context: a personal-data model with no visible lifecycle flow
+    # is a review prompt, not a claim that a feature is legally required or missing.
+    has_personal_fields = any(
+        finding["rule_id"] in {"PRIVACY.PERSONAL_DATA_FIELD", "PRIVACY.SENSITIVE_DATA_FIELD"}
+        for finding in findings
+    )
+    if has_personal_fields and not any(
+        re.search(r"(?i)(delete|erase|export|download).{0,50}(account|user|customer)|"
+                  r"(account|user|customer).{0,50}(delete|erase|export|download)", source)
+        for source in fetched_sources.values()
+    ):
+        source_path = next(
+            finding["file_path"] for finding in findings
+            if finding["rule_id"] in {"PRIVACY.PERSONAL_DATA_FIELD", "PRIVACY.SENSITIVE_DATA_FIELD"}
+        )
+        line = next(
+            finding["line_start"] for finding in findings
+            if finding["file_path"] == source_path
+            and finding["rule_id"] in {"PRIVACY.PERSONAL_DATA_FIELD", "PRIVACY.SENSITIVE_DATA_FIELD"}
+        )
+        source = fetched_sources[source_path]
+        lines = source.splitlines()
+        evidence = redact_evidence(lines[line - 1] if line <= len(lines) else "")
+        for jurisdiction in selected_jurisdictions:
+            findings.append({
+                "rule_id": "PRIVACY.ACCOUNT_LIFECYCLE",
+                "title": "Review account data export and deletion workflows",
+                "category": "privacy_control_gap",
+                "severity": "low",
+                "confidence": 0.45,
+                "status": "requires_manual_review",
+                "file_path": source_path,
+                "line_start": line,
+                "line_end": line,
+                "evidence": evidence,
+                "reasoning": "Personal-data indicators were found, but no account data export or deletion workflow was visible in the scanned files.",
+                "jurisdiction": jurisdiction,
+                "relevant_legal_reference": None,
+                "recommended_fix": "Review product and API requirements for access/export and deletion workflows, including backups and downstream processors.",
+                "false_positive_notes": "The workflow may be implemented in another service, repository, or operational process.",
+                "evidence_kind": "repository_context",
+                "explanation": None,
+            })
+
+    unique_findings: list[dict[str, Any]] = []
+    seen_findings: set[tuple[str, str, int, str]] = set()
+    for finding in findings:
+        identity = (finding["rule_id"], finding["file_path"], finding["line_start"], finding["jurisdiction"])
+        if identity not in seen_findings:
+            seen_findings.add(identity)
+            unique_findings.append(finding)
+    findings = sorted(
+        unique_findings,
+        key=lambda item: (
+            {"critical": 0, "high": 1, "medium": 2, "low": 3}.get(item["severity"], 4),
+            item["file_path"],
+            item["line_start"],
+            item["rule_id"],
+        ),
