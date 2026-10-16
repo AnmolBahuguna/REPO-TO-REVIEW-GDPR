@@ -240,3 +240,69 @@ h1 span {
 .label-privacy {
   bottom: 38px;
   left: 8px;
+  color: #81d6cc;
+}
+
+.scan-panel {
+  padding: 1.65rem 1.8rem 1.35rem;
+  border: 1px solid rgba(140, 169, 198, 0.19);
+  border-radius: 14px;
+  background: linear-gradient(140deg, rgba(17, 35, 54, 0.96), rgba(12, 26, 43, 0.95));
+  box-shadow: 0 18px 55px rgba(0, 0, 0, 0.16);
+}
+
+.panel-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.25rem;
+}
+
+.panel-heading > div {
+  display: flex;
+  align-items: baseline;
+  gap: 0.65rem;
+}
+
+.step-number {
+  color: var(--cyan);
+  font-family: Manrope, 'Segoe UI', sans-serif;
+  font-size: 0.71rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
+
+.panel-heading h2 {
+  margin: 0;
+  color: #e5edf7;
+  font-size: 1rem;
+  letter-spacing: -0.025em;
+}
+
+.panel-meta {
+  color: #70869e;
+  font-size: 0.72rem;
+}
+
+.field-label {
+  display: block;
+  margin-bottom: 0.5rem;
+  color: #c7d4e2;
+  font-size: 0.77rem;
+  font-weight: 600;
+}
+
+.url-input-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.url-input-wrap > svg {
+  position: absolute;
+  left: 1rem;
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: #7c91a8;
+  stroke-linecap: round;
