@@ -9,3 +9,33 @@ rules:
     patterns:
       - pattern: $CURSOR.execute($QUERY)
       - metavariable-pattern:
+          metavariable: $QUERY
+          patterns:
+            - pattern-either:
+                - pattern: f"..."
+                - pattern: $LEFT + $RIGHT
+  - id: code-to-gdpr.javascript.sql-interpolation
+    languages: [javascript, typescript]
+    severity: WARNING
+    message: Potential SQL interpolation; verify untrusted values are bound as parameters.
+    metadata:
+      category: security
+      confidence: medium
+    patterns:
+      - pattern: $DB.query(`...${...}...`)
+  - id: code-to-gdpr.python.hardcoded-credential
+    languages: [python]
+    severity: ERROR
+    message: Potential hardcoded credential; move the secret to a secret manager.
+    metadata:
+      category: security
+      confidence: medium
+    pattern-regex: (?i)\b(?:password|passwd|secret|api[_-]?key|access[_-]?token)\s*=\s*["'][^"']{8,}["']
+  - id: code-to-gdpr.javascript.hardcoded-credential
+    languages: [javascript, typescript]
+    severity: ERROR
+    message: Potential hardcoded credential; move the secret to a secret manager.
+    metadata:
+      category: security
+      confidence: medium
+    pattern-regex: (?i)\b(?:password|passwd|secret|api[_-]?key|access[_-]?token)\s*:\s*["'][^"']{8,}["']
