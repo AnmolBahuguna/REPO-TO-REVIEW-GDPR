@@ -568,3 +568,69 @@ input::placeholder {
   margin-top: 3rem;
 }
 
+.results-heading,
+.findings-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 1rem;
+}
+
+.results-heading .eyebrow {
+  margin-bottom: 0.35rem;
+  font-size: 0.61rem;
+}
+
+.results-heading h2 {
+  margin: 0 0 0.25rem;
+  color: #eef4fb;
+  font-size: 1.6rem;
+  letter-spacing: -0.045em;
+}
+
+.repo-link {
+  display: inline-flex;
+  gap: 0.45rem;
+  color: #79d4cf;
+  text-decoration: none;
+  font-size: 0.78rem;
+}
+
+.repo-link:hover {
+  text-decoration: underline;
+}
+
+.result-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.button-secondary {
+  min-height: 36px;
+  border: 1px solid rgba(145, 169, 195, 0.22);
+  border-radius: 6px;
+  padding: 0.5rem 0.75rem;
+  color: #b9c9d9;
+  background: rgba(18, 37, 58, 0.7);
+  cursor: pointer;
+  font-size: 0.7rem;
+}
+
+.button-secondary:hover {
+  border-color: rgba(97, 223, 208, 0.5);
+  color: #ddf7f4;
+}
+
+.summary-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1.3fr;
+  gap: 0.75rem;
+  margin-top: 1.35rem;
+}
+
+.summary-card {
+  min-height: 102px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  padding: 0.9rem 1rem;
+  background: rgba(15, 31, 49, 0.72);
