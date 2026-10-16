@@ -120,3 +120,13 @@ def main() -> int:
     parser.add_argument("dataset", type=Path, help="Path to the dataset file")
     args = parser.parse_args()
     try:
+        result = validate_dataset(args.dataset)
+    except (FileNotFoundError, ValueError) as exc:
+        parser.error(str(exc))
+        return 2
+    print(json.dumps(result, indent=2, sort_keys=True))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
