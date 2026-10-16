@@ -71,3 +71,68 @@ class RepoValidationTests(unittest.TestCase):
             headers = _github_headers()
         self.assertEqual(headers["Authorization"], "Bearer test-github-token")
 
+    def test_extracts_repository_from_supported_url_forms(self):
+        self.assertEqual(
+            extract_repo_details("https://github.com/example/project"),
+            ("example", "project"),
+        )
+        self.assertEqual(
+            extract_repo_details("github.com/example/project.git"),
+            ("example", "project"),
+        )
+
+    def test_rejects_non_github_and_non_repository_urls(self):
+        invalid_urls = [
+            "https://example.com/example/project",
+            "http://github.com/example/project",
+            "https://github.com/example/project/tree/main",
+            "https://github.com/",
+            "https://github.com/example/project?tab=readme",
+            "https://user:password@github.com/example/project",
+        ]
+        for repo_url in invalid_urls:
+            with self.subTest(repo_url=repo_url):
+                with self.assertRaises(ValueError):
+                    extract_repo_details(repo_url)
+
+    def test_normalizes_supported_jurisdictions_and_rejects_others(self):
+        self.assertEqual(
+            normalize_jurisdictions(["uk_gdpr", "India DPDP", "UK GDPR"]),
+            ["UK GDPR", "India DPDP"],
+        )
+        with self.assertRaisesRegex(ValueError, "Unsupported jurisdiction"):
+            normalize_jurisdictions(["California"])
+        with self.assertRaisesRegex(ValueError, "Select at least one"):
+            normalize_jurisdictions([])
+
+
+class AnalyzerTests(unittest.TestCase):
+    def _rule_ids(self, filename: str, source: str) -> set[str]:
+        findings, _, status = analyze_source_file(filename, source, ["UK GDPR", "India DPDP"])
+        self.assertEqual(status, "parsed")
+        return {finding["rule_id"] for finding in findings}
+
+    def test_python_personal_and_sensitive_schema_and_routes_are_review_not_legal_conclusions(self):
+        source = """
+from pydantic import BaseModel
+from fastapi import APIRouter
+
+class Customer(BaseModel):
+    email_address: str
+    diagnosis_code: str
+
+router = APIRouter()
+@router.get("/customers/{customer_id}")
+def fetch_customer(customer_id: int):
+    return db.query(Customer).all()
+"""
+        findings, method, status = analyze_source_file("src/customers.py", source, ["UK GDPR", "India DPDP"])
+        self.assertEqual(method, "python-ast")
+        self.assertEqual(status, "parsed")
+        self.assertIn("PRIVACY.PERSONAL_DATA_FIELD", {finding["rule_id"] for finding in findings})
+        self.assertIn("PRIVACY.SENSITIVE_DATA_FIELD", {finding["rule_id"] for finding in findings})
+        self.assertIn("API.UNGUARDED_PERSONAL_ROUTE", {finding["rule_id"] for finding in findings})
+        self.assertTrue(all(finding["status"] == "requires_manual_review" for finding in findings))
+        self.assertTrue(all(finding["line_start"] > 0 and finding["evidence"] for finding in findings))
+        india_findings = [finding for finding in findings if finding["jurisdiction"] == "India DPDP"]
+        self.assertTrue(india_findings)
