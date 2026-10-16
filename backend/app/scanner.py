@@ -192,3 +192,69 @@ def _semgrep_findings(
                 code = match.get("extra", {}).get("lines", "")
                 # A Semgrep result is retained only when the corresponding evidence line exists.
                 if not code:
+                    continue
+                findings.append({
+                    "rule_id": rule_id,
+                    "title": "Semgrep: " + match.get("extra", {}).get("message", rule_id),
+                    "category": "technical_vulnerability",
+                    "severity": "high",
+                    "confidence": 0.8,
+                    "status": "potential_issue",
+                    "file_path": relative_path,
+                    "line_start": line,
+                    "line_end": int(match.get("end", {}).get("line", line)),
+                    "evidence": redact_evidence(code),
+                    "reasoning": "An enabled Semgrep rule matched this source. Validate the data flow and remediation context.",
+                    "jurisdiction": "General security review",
+                    "relevant_legal_reference": None,
+                    "recommended_fix": "Review the matching rule and use a safe parameterized query or external secret store.",
+                    "false_positive_notes": "Semgrep pattern matches can be false positives; confirm source and data flow.",
+                    "evidence_kind": "semgrep",
+                    "explanation": None,
+                })
+    except (OSError, subprocess.TimeoutExpired, json.JSONDecodeError, ValueError):
+        warnings.append("Semgrep could not complete; built-in analyzers' results were retained.")
+        return []
+    return findings
+
+
+def analyze_repository(repo_url: str, jurisdictions: list[str] | None = None) -> dict[str, Any]:
+    owner, repo_name = extract_repo_details(repo_url)
+    selected_jurisdictions = normalize_jurisdictions(jurisdictions)
+    api_repo = f"https://api.github.com/repos/{quote(owner, safe='')}/{quote(repo_name, safe='')}"
+    deadline = time.monotonic() + MAX_SCAN_SECONDS
+
+    # Fixed HTTPS origins, validated repository components, and disabled redirects
+    # prevent user-controlled URLs from reaching arbitrary network destinations.
+    with httpx.Client(headers=_github_headers(), timeout=20, follow_redirects=False) as client:
+        repo_meta = fetch_json(client, api_repo)
+        default_branch = repo_meta.get("default_branch")
+        if not isinstance(default_branch, str) or not default_branch:
+            raise ValueError("GitHub did not provide a default branch for this repository.")
+
+        tree_url = f"{api_repo}/git/trees/{quote(default_branch, safe='')}?recursive=1"
+        tree = fetch_json(client, tree_url)
+        warnings: list[str] = []
+
+        def add_warning(message: str) -> None:
+            if message in warnings:
+                return
+            if len(warnings) < MAX_WARNINGS:
+                warnings.append(message)
+            elif warnings[-1] != "Additional scan warnings were omitted.":
+                warnings[-1] = "Additional scan warnings were omitted."
+
+        if tree.get("truncated"):
+            add_warning("GitHub truncated the repository tree; some files were not available to the scanner.")
+
+        supported_files: list[dict[str, Any]] = []
+        unsupported_samples: list[str] = []
+        skipped = 0
+        unsupported = 0
+        for item in tree.get("tree", []):
+            if item.get("type") != "blob":
+                continue
+            path = item.get("path", "")
+            if not _safe_repo_path(path):
+                skipped += 1
+                continue
