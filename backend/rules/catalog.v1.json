@@ -1,0 +1,44 @@
+{
+  "schema_version": "1.0.0",
+  "catalog_version": "1.0.0",
+  "rules": [
+    {
+      "id": "PRIVACY.PERSONAL_DATA_FIELD",
+      "category": "personal_data_indicator",
+      "severity": "low",
+      "confidence": 0.62,
+      "status": "requires_manual_review",
+      "title": "Potential personal-data field",
+      "reasoning": "A schema, model, or request-handling expression appears to represent personal data. A field name is an indicator, not proof of collection, identifiability, or a compliance violation.",
+      "recommended_fix": "Confirm what data is processed, document purpose and retention, and minimize fields that are not required.",
+      "false_positive_notes": "May describe test data, a non-personal identifier, or an unused field."
+    },
+    {
+      "id": "PRIVACY.SENSITIVE_DATA_FIELD",
+      "category": "sensitive_data_indicator",
+      "severity": "medium",
+      "confidence": 0.7,
+      "status": "requires_manual_review",
+      "title": "Potential sensitive or special-category data",
+      "reasoning": "A schema or data-handling expression appears to refer to health, biometric, or another sensitive category. Context, purpose, and applicable law determine the significance.",
+      "recommended_fix": "Verify the data category and purpose; seek privacy/legal review and apply appropriate access, minimization, and retention safeguards.",
+      "false_positive_notes": "A keyword may be documentation, a test fixture, or a non-personal field."
+    },
+    {
+      "id": "SECURITY.SQL_INJECTION",
+      "category": "technical_vulnerability",
+      "severity": "high",
+      "confidence": 0.86,
+      "status": "potential_issue",
+      "title": "Potential SQL injection",
+      "reasoning": "Untrusted input appears to be interpolated or concatenated into SQL before execution.",
+      "recommended_fix": "Use bound parameters or the ORM's parameterized query API; do not interpolate untrusted values into SQL.",
+      "false_positive_notes": "Review whether the value is truly untrusted and whether a safe binding occurs in a wrapper."
+    },
+    {
+      "id": "SECURITY.HARDCODED_SECRET",
+      "category": "technical_vulnerability",
+      "severity": "high",
+      "confidence": 0.82,
+      "status": "potential_issue",
+      "title": "Potential hardcoded credential",

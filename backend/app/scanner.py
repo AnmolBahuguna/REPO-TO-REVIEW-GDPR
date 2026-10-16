@@ -455,3 +455,4 @@ def analyze_repository(repo_url: str, jurisdictions: list[str] | None = None) ->
         },
         "findings": findings,
         "warnings": warnings,
+    }
