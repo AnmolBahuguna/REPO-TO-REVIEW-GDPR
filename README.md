@@ -44,3 +44,69 @@ python -m venv .venv
 pip install -r requirements.txt
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
+
+Optional API keys can be placed in `backend/.env` (copy `backend/.env.example`) or set in the backend process environment:
+
+```powershell
+GITHUB_TOKEN=github-token-with-repository-read-access
+OPENROUTER_API_KEY=openrouter-api-key
+OPENROUTER_MODEL=openai/gpt-4o-mini
+```
+
+`GITHUB_TOKEN` is optional for public repositories (it raises GitHub API rate limits) and is sent only to GitHub. It may allow access to repositories the token can read, so keep it in the backend `.env`; never put it in frontend code. `OPENROUTER_API_KEY` is optional and used only when AI explanations are enabled. The scanner validates GitHub URLs, uses fixed GitHub HTTPS hosts, disables redirects, caps files at 1 MB and scans at 250 files, and never executes repository code. GitHub's recursive tree endpoint may truncate very large repositories; that condition appears as a scan warning. The API also reports unparsed and unsupported files instead of claiming they were analyzed.
+
+Optional Semgrep installation:
+
+```powershell
+pip install semgrep
+```
+
+Semgrep runs against temporary copies of selected source files, with a time limit; temporary files are cleaned when the scan finishes. It is not required for the built-in AST/tree-sitter engine.
+
+The backend endpoints are `/health`, `/api/rules`, and `POST /api/scan`. Interactive docs: `http://localhost:8000/docs`. Set `include_explanations: true` in a scan request to explicitly opt in to OpenRouter enrichment.
+
+### Frontend
+
+In another terminal:
+
+```powershell
+cd frontend
+npm install
+npm run dev
+```
+
+The Vite development server proxies `/api` and `/health` to `http://localhost:8000`. For a separately hosted API, set `VITE_API_BASE_URL` at frontend build time. The optional AI checkbox sends at most eight redacted finding excerpts to OpenRouter for explanations and engineering recommendations; it does not send the repository or full files.
+
+## Tests and evaluation
+
+Run backend tests:
+
+```powershell
+cd backend
+python -m unittest discover -s tests
+```
+
+Build the frontend:
+
+```powershell
+cd frontend
+npm run build
+```
+
+Install the ML dependencies and validate a dataset:
+
+```powershell
+cd backend
+pip install -r requirements.txt
+python -m app.datasets data/code_to_gdpr_seed_dataset.jsonl
+```
+
+Train a model and report validation and held-out test metrics. Keep semantically related examples under one `group_id`; group IDs are kept out of one another's splits:
+
+```powershell
+cd backend
+python scripts/train_model.py data/code_to_gdpr_seed_dataset.jsonl
+```
+
+The trained artifact is written to `backend/artifacts/privacy_triage.joblib` (ignored by git). Classify a source file with it:
+
