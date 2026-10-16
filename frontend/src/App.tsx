@@ -500,3 +500,13 @@ function App() {
           ) : null}
         </main>
 
+        <footer className="footer">
+          <span>Privacy Lens</span>
+          <span>Evidence-based static analysis · Not a legal determination</span>
+        </footer>
+      </div>
+    </div>
+  );
+}
+
+export default App;
