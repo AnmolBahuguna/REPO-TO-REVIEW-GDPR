@@ -268,3 +268,68 @@ class DatasetTests(unittest.TestCase):
                 {"code": "logger.info('complete')", "label": "negative", "language": "python", "category": "logging", "group_id": "safe-log"},
                 {"code": "return payload", "label": "requires_context", "language": "python", "category": "api", "group_id": "context-case"},
             ]
+            path.write_text("\n".join(json.dumps(record) for record in records), encoding="utf-8")
+            development, held_out = _split(load_dataset(path))
+            result = evaluate(path)
+
+        self.assertFalse({item.group_id for item in development} & {item.group_id for item in held_out})
+        self.assertTrue(result["split"]["related_variants_kept_together"])
+        self.assertIn("false_positive_rate", result["metrics"])
+        self.assertIn("false_negative_rate", result["metrics"])
+
+    def test_explanation_schema_rejects_extra_or_legal_claims(self):
+        with self.assertRaises(ValueError):
+            _parse_explanation(
+                '{"findings":[{"rule_id":"PRIVACY.PERSONAL_DATA_FIELD","explanation":"This violates Article 9.","recommended_fix":"Review."}]}',
+                {"PRIVACY.PERSONAL_DATA_FIELD"},
+            )
+        accepted = _parse_explanation(
+            '{"findings":[{"rule_id":"PRIVACY.PERSONAL_DATA_FIELD","explanation":"The field may hold personal data; verify usage.","recommended_fix":"Confirm necessity and minimize."}]}',
+            {"PRIVACY.PERSONAL_DATA_FIELD"},
+        )
+        self.assertIn("PRIVACY.PERSONAL_DATA_FIELD", accepted)
+
+    def test_openrouter_uses_bearer_auth_and_validated_explanation(self):
+        finding = {
+            "rule_id": "PRIVACY.PERSONAL_DATA_FIELD",
+            "title": "Potential personal-data field",
+            "reasoning": "The field may represent personal data.",
+            "evidence": "email_address: str",
+            "jurisdiction": "UK GDPR",
+            "recommended_fix": "Review field necessity.",
+        }
+        response_content = json.dumps({
+            "findings": [{
+                "rule_id": finding["rule_id"],
+                "explanation": "This field may hold personal data; verify its use.",
+                "recommended_fix": "Confirm necessity and minimize collected fields.",
+            }],
+        })
+
+        class FakeAsyncClient:
+            request_headers = None
+
+            def __init__(self, **_kwargs):
+                pass
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, *_args):
+                return None
+
+            async def post(self, _url, *, headers, json):
+                self.request_headers = headers
+                return httpx.Response(
+                    200,
+                    json={"choices": [{"message": {"content": response_content}}]},
+                    request=httpx.Request("POST", _url),
+                )
+
+        fake_client = FakeAsyncClient()
+        with (
+            patch.dict(os.environ, {"OPENROUTER_API_KEY": "test-openrouter-key"}),
+            patch("app.explanations.httpx.AsyncClient", return_value=fake_client),
+        ):
+            count, warning = asyncio.run(enrich_findings([finding]))
+
