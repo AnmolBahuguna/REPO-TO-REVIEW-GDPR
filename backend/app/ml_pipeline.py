@@ -159,3 +159,5 @@ def predict_many(bundle: dict[str, Any], texts: list[str]) -> list[dict[str, Any
             "top_class_score": float(ranked[0][1]),
             "probabilities": {str(label): float(probability) for label, probability in zip(classes, row)},
             "model_version": bundle["metadata"]["model_version"],
+        })
+    return predictions
