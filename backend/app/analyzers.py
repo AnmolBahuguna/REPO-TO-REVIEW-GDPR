@@ -506,3 +506,68 @@ def _tree_sitter_analysis(
                 add("API.BROAD_DATA_RESPONSE", line_index, "General security review")
 
     return findings, "parsed"
+
+
+def _walk_tree(root: Any) -> list[Any]:
+    nodes: list[Any] = []
+    stack = [root]
+    while stack:
+        node = stack.pop()
+        nodes.append(node)
+        stack.extend(reversed(node.children))
+    return nodes
+
+
+def _schema_analysis(
+    file_path: str, source: str, jurisdictions: list[str]
+) -> tuple[list[dict[str, Any]], str]:
+    findings: list[dict[str, Any]] = []
+    if file_path.lower().endswith(".json"):
+        import json
+        try:
+            schema = json.loads(source)
+        except (json.JSONDecodeError, TypeError):
+            return findings, "parse_error"
+    else:
+        import yaml
+        try:
+            schema = yaml.safe_load(source)
+        except (yaml.YAMLError, TypeError):
+            return findings, "parse_error"
+
+    def visit(value: Any, parent_key: str = "") -> None:
+        if isinstance(value, dict):
+            for key, child in value.items():
+                normalized = str(key)
+                line = _key_line(source, normalized)
+                if PERSONAL_RE.search(normalized):
+                    for jurisdiction in jurisdictions:
+                        findings.append(_finding("PRIVACY.PERSONAL_DATA_FIELD", file_path, source, _offset_for_line(source, line), _offset_for_line(source, line) + 1, jurisdiction))
+                if SENSITIVE_RE.search(normalized):
+                    for jurisdiction in jurisdictions:
+                        findings.append(_finding("PRIVACY.SENSITIVE_DATA_FIELD", file_path, source, _offset_for_line(source, line), _offset_for_line(source, line) + 1, jurisdiction))
+                visit(child, normalized)
+        elif isinstance(value, list):
+            for child in value:
+                visit(child, parent_key)
+
+    visit(schema)
+    return findings, "parsed"
+
+
+def _key_line(source: str, key: str) -> int:
+    escaped = re.escape(key)
+    match = re.search(rf"(?m)^\s*(?:['\"]?{escaped}['\"]?)\s*:", source)
+    if not match:
+        match = re.search(rf"['\"]{escaped}['\"]\s*:", source)
+    return _line_for_offset(source, match.start()) if match else 1
+
+
+def _offset_for_line(source: str, line: int) -> int:
+    if line <= 1:
+        return 0
+    return sum(len(row) + 1 for row in source.splitlines()[:line - 1])
+
+
+def analyze_source_file(
+    file_path: str,
