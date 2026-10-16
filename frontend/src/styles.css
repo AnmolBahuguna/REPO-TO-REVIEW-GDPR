@@ -1487,3 +1487,32 @@ html[data-theme='dark'] .status-tag.requires_manual_review { color: #ecd983; }
 html[data-theme='dark'] .status-tag.no_issue_detected_by_rule { color: #8dd4bb; }
 html[data-theme='dark'] .evidence-details summary { color: #77cbc6; }
 html[data-theme='dark'] .evidence-details summary span { color: #8ca1b5; }
+html[data-theme='dark'] .evidence-box { border-color: rgba(145, 169, 195, .14); background: rgba(4, 15, 28, .72); }
+html[data-theme='dark'] .evidence-box code { color: #c4d3e1; }
+html[data-theme='dark'] .recommendation { color: #a9bdcf; }
+html[data-theme='dark'] .recommendation strong { color: #c0dedc; }
+html[data-theme='dark'] .ai-explanation { color: #aabed0; }
+html[data-theme='dark'] .ai-explanation strong { color: #a7cbf2; }
+html[data-theme='dark'] .false-positive-notes { color: #91a5b8; }
+html[data-theme='dark'] .false-positive-notes strong { color: #a9bdce; }
+html[data-theme='dark'] .empty-state { border-color: rgba(145, 169, 195, .22); background: rgba(15, 31, 49, .5); }
+html[data-theme='dark'] .empty-state > span { color: #75d8cb; background: rgba(46, 127, 121, .2); }
+html[data-theme='dark'] .empty-state strong { color: #d6e3ef; }
+html[data-theme='dark'] .empty-state p { color: #93a7bb; }
+html[data-theme='dark'] .footer { border-color: rgba(148, 173, 201, .12); color: #788ea4; }
+html[data-theme='dark'] .footer span:first-child { color: #a5b9ca; }
+
+@media print {
+  :root, body { color: #111827; background: white; }
+  .page-shell { padding: 0; }
+  .container { width: 100%; }
+  .topbar, .hero, .scan-panel, .disclaimer, .error-box, .loading-state, .result-actions, .severity-grid, .finding-filters, .footer, .evidence-details summary { display: none !important; }
+  .results { margin: 0; }
+  .results-heading h2, .repo-link, .summary-card strong, .finding-card h4, .recommendation, .legal-basis { color: #111827; }
+  .summary-grid { grid-template-columns: repeat(3, 1fr); }
+  .summary-card, .finding-card, .empty-state { break-inside: avoid; box-shadow: none; background: white; border: 1px solid #cbd5e1; }
+  .finding-card { margin-bottom: .5rem; }
+  .evidence-details > .evidence-box { display: grid !important; }
+  .evidence-box { background: #f8fafc; }
+  .evidence-box code { color: #1f2937; }
+}
