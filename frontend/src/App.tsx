@@ -106,3 +106,69 @@ function App() {
     setSelectedJurisdictions((current) => (
       current.includes(value) ? current.filter((item) => item !== value) : [...current, value]
     ));
+  };
+
+  const filteredFindings = useMemo(() => {
+    if (!result) return [];
+    const search = query.trim().toLowerCase();
+    return result.findings
+      .filter((finding) => severityFilter === 'all' || finding.severity === severityFilter)
+      .filter((finding) => {
+        if (!search) return true;
+        const haystack = [
+          finding.title,
+          finding.category,
+          finding.jurisdiction,
+          finding.reasoning,
+          finding.recommended_fix,
+          finding.explanation ?? '',
+          finding.evidence,
+          finding.rule_id,
+          finding.file_path,
+        ].join(' ').toLowerCase();
+        return haystack.includes(search);
+      })
+      .sort((first, second) => SEVERITY_ORDER.indexOf(first.severity) - SEVERITY_ORDER.indexOf(second.severity));
+  }, [query, result, severityFilter]);
+
+  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setLoading(true);
+    setError('');
+    setResult(null);
+    setQuery('');
+    setSeverityFilter('all');
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/scan`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          repo_url: repoUrl.trim(),
+          jurisdictions: selectedJurisdictions,
+          include_explanations: includeExplanations,
+        }),
+      });
+
+      const data: unknown = await response.json().catch(() => null);
+      if (!response.ok) {
+        const detail = data && typeof data === 'object' && 'detail' in data && typeof data.detail === 'string'
+          ? data.detail
+          : `Scan failed with status ${response.status}.`;
+        throw new Error(detail);
+      }
+      if (!isScanResponse(data)) {
+        throw new Error('The scan service returned an invalid response.');
+      }
+      setResult(data);
+    } catch (scanError) {
+      setError(scanError instanceof Error ? scanError.message : 'Could not complete the scan.');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function exportJson() {
+    if (!result) return;
+    const blob = new Blob([JSON.stringify(result, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
