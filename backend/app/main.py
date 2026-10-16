@@ -65,3 +65,39 @@ def list_rules() -> dict[str, Any]:
 @app.post("/api/scan")
 async def scan_repository(payload: ScanRequest):
     repo_url = (payload.repo_url or "").strip()
+    if not repo_url:
+        raise HTTPException(status_code=400, detail="A GitHub repository URL is required.")
+    if not payload.jurisdictions:
+        raise HTTPException(status_code=422, detail="Select at least one jurisdiction.")
+
+    try:
+        result = await run_in_threadpool(analyze_repository, repo_url, payload.jurisdictions)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except httpx.HTTPStatusError as exc:
+        if exc.response.status_code == 404:
+            raise HTTPException(status_code=404, detail="Repository not found or is not publicly accessible.") from exc
+        if exc.response.status_code == 403 and exc.response.headers.get("X-RateLimit-Remaining") == "0":
+            raise HTTPException(
+                status_code=429,
+                detail="GitHub API rate limit reached. Try again later or configure a GITHUB_TOKEN for the backend.",
+            ) from exc
+        raise HTTPException(status_code=502, detail="GitHub rejected a repository scan request.") from exc
+    except httpx.HTTPError as exc:
+        raise HTTPException(status_code=502, detail="GitHub API request failed; retry later or check repository access.") from exc
+
+    if payload.include_explanations:
+        result["summary"]["ai_explanations_requested"] = True
+        enriched, warning = await enrich_findings(result["findings"])
+        result["summary"]["ai_findings_enriched"] = enriched
+        result["summary"]["ai_provider"] = "OpenRouter" if enriched else None
+        if warning:
+            result["warnings"].append(warning)
+
+    return result
+
+
+if __name__ == "__main__":
+    import uvicorn
+
+    uvicorn.run("app.main:app", host="0.0.0.0", port=8000, reload=True)
