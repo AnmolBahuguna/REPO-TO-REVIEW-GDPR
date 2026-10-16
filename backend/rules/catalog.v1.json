@@ -108,3 +108,58 @@
       "confidence": 0.58,
       "status": "requires_manual_review",
       "title": "Review personal-data transfer to an external service",
+      "reasoning": "A network request appears to send a personal-data variable or object to an external destination.",
+      "recommended_fix": "Confirm the recipient, purpose, data minimization, security, retention, and applicable transfer safeguards.",
+      "false_positive_notes": "The destination may be an approved first-party service or the payload may be synthetic or redacted."
+    },
+    {
+      "id": "PRIVACY.ACCOUNT_LIFECYCLE",
+      "category": "privacy_control_gap",
+      "severity": "low",
+      "confidence": 0.45,
+      "status": "requires_manual_review",
+      "title": "Review account data export and deletion workflows",
+      "reasoning": "The repository appears to model user/customer personal data, but a matching export or deletion workflow was not found in scanned files.",
+      "recommended_fix": "Review product and API requirements for access/export and deletion workflows, including backups and downstream processors.",
+      "false_positive_notes": "The workflow may be implemented in another service, repository, or operational process."
+    },
+    {
+      "id": "PRIVACY.UNSAFE_EXCEPTION",
+      "category": "privacy_control_gap",
+      "severity": "medium",
+      "confidence": 0.68,
+      "status": "requires_manual_review",
+      "title": "Review exception response for data exposure",
+      "reasoning": "An exception response appears to include raw exception or request-derived content.",
+      "recommended_fix": "Return a stable client-safe error and keep sensitive diagnostic context in access-controlled, redacted logs.",
+      "false_positive_notes": "The exception message may be deliberately sanitized by a shared handler."
+    }
+  ],
+  "jurisdictions": {
+    "UK GDPR": {
+      "mapping_version": "1.0.0",
+      "status": "human_review_required",
+      "references": {
+        "personal_data_indicator": {
+          "reference": "UK GDPR Articles 5 and 25",
+          "url": "https://www.legislation.gov.uk/eur/2016/679/contents"
+        },
+        "sensitive_data_indicator": {
+          "reference": "UK GDPR Article 9",
+          "url": "https://www.legislation.gov.uk/eur/2016/679/article/9"
+        },
+        "technical_vulnerability": {
+          "reference": "UK GDPR Article 32 (security of processing)",
+          "url": "https://www.legislation.gov.uk/eur/2016/679/article/32"
+        }
+      },
+      "notice": "These are potentially relevant provisions, not a determination of applicability or breach. Confirm current authoritative text and facts with qualified counsel."
+    },
+    "India DPDP": {
+      "mapping_version": "1.0.0",
+      "status": "current_status_unverified",
+      "references": {},
+      "notice": "The Act and rules' commencement, applicability, and current implementation status were not verified for this release. Findings are technical signals only; consult current official Gazette/MeitY publications and qualified counsel."
+    }
+  }
+}

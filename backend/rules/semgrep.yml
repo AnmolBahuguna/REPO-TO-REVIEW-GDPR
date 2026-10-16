@@ -1,0 +1,11 @@
+rules:
+  - id: code-to-gdpr.python.sql-interpolation
+    languages: [python]
+    severity: WARNING
+    message: Potential SQL interpolation; verify untrusted values are bound as parameters.
+    metadata:
+      category: security
+      confidence: medium
+    patterns:
+      - pattern: $CURSOR.execute($QUERY)
+      - metavariable-pattern:
