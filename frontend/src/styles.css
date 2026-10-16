@@ -1028,3 +1028,68 @@ input::placeholder {
 
 .false-positive-notes {
   color: #8398ac;
+  font-size: 0.65rem;
+}
+
+.false-positive-notes strong {
+  color: #9aafc2;
+  font-weight: 600;
+}
+
+.empty-state {
+  display: grid;
+  justify-items: center;
+  gap: 0.45rem;
+  border: 1px dashed rgba(145, 169, 195, 0.2);
+  border-radius: 9px;
+  padding: 2.2rem 1rem;
+  text-align: center;
+  background: rgba(15, 31, 49, 0.38);
+}
+
+.empty-state > span {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  margin-bottom: 0.3rem;
+  border-radius: 50%;
+  color: #75d8cb;
+  background: rgba(46, 127, 121, 0.16);
+}
+
+.empty-state strong {
+  color: #d6e3ef;
+  font-size: 0.82rem;
+}
+
+.empty-state p {
+  max-width: 440px;
+  margin: 0;
+  color: #8297ac;
+  font-size: 0.71rem;
+  line-height: 1.6;
+}
+
+.footer {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-top: 3rem;
+  padding: 1.2rem 0 0.6rem;
+  border-top: 1px solid rgba(148, 173, 201, 0.1);
+  color: #657b91;
+  font-size: 0.64rem;
+}
+
+.footer span:first-child {
+  color: #91a7bc;
+  font-weight: 700;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
