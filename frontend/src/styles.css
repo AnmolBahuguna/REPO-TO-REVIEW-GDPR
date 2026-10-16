@@ -174,3 +174,69 @@ h1 span {
 }
 
 .hero-art {
+  flex: 0 0 250px;
+  height: 250px;
+  position: relative;
+  display: grid;
+  place-items: center;
+}
+
+.art-orbit {
+  position: absolute;
+  border: 1px solid rgba(103, 171, 197, 0.17);
+  border-radius: 50%;
+  transform: rotate(-24deg);
+}
+
+.orbit-one {
+  width: 208px;
+  height: 125px;
+}
+
+.orbit-two {
+  width: 170px;
+  height: 225px;
+  transform: rotate(34deg);
+}
+
+.art-shield {
+  display: grid;
+  place-items: center;
+  width: 118px;
+  height: 130px;
+  border: 1px solid rgba(97, 223, 208, 0.52);
+  border-radius: 36% 36% 44% 44%;
+  background: linear-gradient(150deg, rgba(28, 84, 97, 0.55), rgba(17, 43, 63, 0.8));
+  box-shadow: 0 0 75px rgba(42, 168, 173, 0.16), inset 0 0 24px rgba(97, 223, 208, 0.08);
+  transform: rotate(0deg);
+}
+
+.art-shield svg {
+  width: 54px;
+  fill: none;
+  stroke: var(--cyan);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2.5;
+}
+
+.art-label {
+  position: absolute;
+  border: 1px solid rgba(130, 169, 198, 0.2);
+  border-radius: 6px;
+  padding: 0.28rem 0.44rem;
+  color: #8caac2;
+  background: #0b1a2a;
+  font-size: 0.54rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+}
+
+.label-code {
+  top: 40px;
+  right: 12px;
+}
+
+.label-privacy {
+  bottom: 38px;
+  left: 8px;
