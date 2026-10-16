@@ -440,3 +440,69 @@ def _tree_sitter_analysis(
             argument_identifiers = " ".join(
                 descendant.text.decode("utf-8", errors="replace")
                 for descendant in _walk_tree(call_node)
+                if descendant.child_count == 0 and descendant.type in {
+                    "identifier", "property_identifier", "shorthand_property_identifier",
+                    "shorthand_property_identifier_pattern", "type_identifier",
+                }
+            )
+            logs_data = re.search(
+                r"(?i)\b(?:request|payload|user|customer|email|phone|token|password|secret)\b",
+                argument_identifiers,
+            ) or re.search(r"(?i)\breq\b.*\bbody\b", argument_identifiers)
+            if not safely_transformed and LOG_CALL_RE.match(call_source) and logs_data:
+                add("PRIVACY.SENSITIVE_LOGGING", line, "General security review")
+            if SQL_RE.search(call_source) and SQL_INTERPOLATION_RE.search(call_source):
+                add("SECURITY.SQL_INJECTION", line, "General security review")
+            if OUTBOUND_RE.search(call_source) and (PERSONAL_RE.search(call_source) or SENSITIVE_RE.search(call_source)):
+                for jurisdiction in jurisdictions:
+                    add("PRIVACY.PERSONAL_DATA_EGRESS", line, jurisdiction)
+
+        for node in nodes:
+            if node.type in {"function_declaration", "method_definition", "arrow_function", "function"}:
+                start_line = node.start_point.row + 1
+                end_line = node.end_point.row + 1
+                body = source_bytes[node.start_byte:node.end_byte].decode("utf-8", errors="replace")
+                parent = node.parent
+                route_context = body
+                for _ in range(5):
+                    if parent is None:
+                        break
+                    route_context = source_bytes[parent.start_byte:parent.end_byte].decode("utf-8", errors="replace")
+                    if ROUTE_RE.search(route_context) or re.search(
+                        r"(?i)(?:app|router|api)\.(?:get|post|put|patch|delete)\s*\(", route_context
+                    ):
+                        break
+                    if parent.type in {"program", "statement_block"}:
+                        break
+                    parent = parent.parent
+                if not ROUTE_RE.search(route_context) and not re.search(
+                    r"(?i)(?:app|router|api)\.(?:get|post|put|patch|delete)\s*\(", route_context
+                ):
+                    continue
+                if not (PERSONAL_RE.search(body) or SENSITIVE_RE.search(body)):
+                    continue
+                if AUTH_RE.search(body) or AUTH_RE.search(route_context):
+                    continue
+                add("API.UNGUARDED_PERSONAL_ROUTE", start_line, jurisdictions[0])
+                if BROAD_QUERY_RE.search(body) or re.search(r"\.(?:find|all|findAll)\s*\(", body):
+                    add("API.BROAD_DATA_RESPONSE", start_line, "General security review")
+                if re.search(r"(?i)\b(?:export|download|dump|bulk)\b", body) and re.search(
+                    r"\.(?:find|all|findAll)\s*\(", body
+                ):
+                    add("PRIVACY.BULK_EXPORT", start_line, "General security review")
+                if re.search(r"tenant|workspace|organization", body, re.I) and not re.search(
+                    r"tenantId|workspaceId|organizationId", body, re.I
+                ):
+                    add("PRIVACY.CROSS_TENANT_QUERY", start_line, "General security review")
+                if end_line > start_line:
+                    for jurisdiction in jurisdictions[1:]:
+                        add("API.UNGUARDED_PERSONAL_ROUTE", start_line, jurisdiction)
+
+    if language == "sql":
+        for line_index, line_text in enumerate(source_lines, start=1):
+            if re.search(r"(?i)\bEXEC(?:UTE)?\s*\(\s*['\"].*(?:\+|%|concat\s*\()", line_text):
+                add("SECURITY.SQL_INJECTION", line_index, "General security review")
+            if re.search(r"(?i)\bSELECT\s+\*\s+FROM\b", line_text):
+                add("API.BROAD_DATA_RESPONSE", line_index, "General security review")
+
+    return findings, "parsed"
