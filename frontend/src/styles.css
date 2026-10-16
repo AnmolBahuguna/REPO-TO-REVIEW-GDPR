@@ -831,3 +831,68 @@ input::placeholder {
   border: 0;
   color: #79d4cf;
   background: transparent;
+  cursor: pointer;
+  font-size: 0.68rem;
+  white-space: nowrap;
+}
+
+.findings-list {
+  display: grid;
+  gap: 0.7rem;
+}
+
+.finding-card {
+  display: grid;
+  grid-template-columns: 3px minmax(0, 1fr);
+  gap: 1rem;
+  border: 1px solid rgba(145, 169, 195, 0.14);
+  border-radius: 9px;
+  padding: 1.05rem 1.1rem;
+  background: rgba(13, 28, 46, 0.77);
+}
+
+.finding-marker {
+  width: 3px;
+  height: 100%;
+  min-height: 42px;
+  border-radius: 5px;
+  background: #7097b8;
+}
+
+.finding-card.critical .finding-marker { background: #f16d76; }
+.finding-card.high .finding-marker { background: #e9954c; }
+.finding-card.medium .finding-marker { background: #dcc15a; }
+.finding-card.low .finding-marker { background: #6ca9e9; }
+
+.finding-topline {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.badge {
+  border-radius: 4px;
+  padding: 0.22rem 0.4rem;
+  font-size: 0.56rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.badge.critical { color: #ffb3b8; background: rgba(241, 109, 118, 0.14); }
+.badge.high { color: #ffc08e; background: rgba(233, 149, 76, 0.14); }
+.badge.medium { color: #ecd983; background: rgba(220, 193, 90, 0.14); }
+.badge.low { color: #9bcaf7; background: rgba(108, 169, 233, 0.14); }
+
+.category,
+.jurisdiction {
+  color: #8fa5bb;
+  font-size: 0.66rem;
+}
+
+.jurisdiction {
+  padding-left: 0.5rem;
+  border-left: 1px solid rgba(145, 169, 195, 0.25);
+}
+
