@@ -258,3 +258,69 @@ def analyze_repository(repo_url: str, jurisdictions: list[str] | None = None) ->
             if not _safe_repo_path(path):
                 skipped += 1
                 continue
+            parts = path.lower().split("/")
+            extension = Path(path).suffix.lower()
+            if any(part in IGNORED_PATH_PARTS for part in parts):
+                skipped += 1
+                continue
+            if extension not in SUPPORTED_EXTENSIONS:
+                unsupported += 1
+                if len(unsupported_samples) < 12:
+                    unsupported_samples.append(path)
+                continue
+            try:
+                file_size = int(item.get("size", 0))
+            except (TypeError, ValueError):
+                file_size = MAX_FILE_SIZE_BYTES + 1
+            if file_size > MAX_FILE_SIZE_BYTES:
+                skipped += 1
+                add_warning(f"Skipped oversized file: {path}")
+                continue
+            supported_files.append(item)
+
+        supported_files.sort(key=lambda item: item["path"])
+        if len(supported_files) > MAX_SUPPORTED_FILES:
+            skipped += len(supported_files) - MAX_SUPPORTED_FILES
+            supported_files = supported_files[:MAX_SUPPORTED_FILES]
+            add_warning(f"Repository is large; only the first {MAX_SUPPORTED_FILES} supported files were selected.")
+
+        if unsupported:
+            add_warning(f"{unsupported} files with unsupported extensions were not analyzed; see unsupported_file_samples.")
+
+        def fetch_candidate(item: dict[str, Any]) -> tuple[str, str | None]:
+            if time.monotonic() >= deadline:
+                return item["path"], None
+            path = item["path"]
+            raw_url = (
+                f"https://raw.githubusercontent.com/{quote(owner, safe='')}/"
+                f"{quote(repo_name, safe='')}/{quote(default_branch, safe='')}/{quote(path, safe='/')}"
+            )
+            try:
+                return path, fetch_text(client, raw_url)
+            except (httpx.HTTPError, ValueError):
+                return path, None
+
+        fetched_sources: dict[str, str] = {}
+        with ThreadPoolExecutor(max_workers=MAX_CONCURRENT_DOWNLOADS) as executor:
+            for path, content in executor.map(fetch_candidate, supported_files):
+                if content is None:
+                    skipped += 1
+                    add_warning(f"Skipped unreadable or oversized file: {path}")
+                    continue
+                fetched_sources[path] = content
+
+    findings: list[dict[str, Any]] = []
+    analysis_methods: dict[str, int] = {}
+    parse_errors: list[str] = []
+    for path, source in fetched_sources.items():
+        method = "unsupported"
+        status = "unsupported"
+        file_findings: list[dict[str, Any]] = []
+        try:
+            file_findings, method, status = analyze_source_file(path, source, selected_jurisdictions)
+        except (ValueError, TypeError, UnicodeError):
+            status = "parse_error"
+        analysis_methods[method] = analysis_methods.get(method, 0) + 1
+        if status == "parse_error":
+            parse_errors.append(path)
+            continue
