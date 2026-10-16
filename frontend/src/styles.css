@@ -371,3 +371,69 @@ input::placeholder {
   align-items: center;
   gap: 0.5rem;
   min-height: 37px;
+  border: 1px solid rgba(145, 169, 195, 0.19);
+  border-radius: 7px;
+  padding: 0.45rem 0.75rem;
+  color: #9aacc0;
+  background: rgba(3, 14, 26, 0.36);
+  cursor: pointer;
+  font-size: 0.73rem;
+  transition: border-color 120ms ease, color 120ms ease, background 120ms ease;
+}
+
+.check-pill.selected {
+  border-color: rgba(97, 223, 208, 0.4);
+  color: #caeeeb;
+  background: rgba(37, 114, 112, 0.16);
+}
+
+.check-pill input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.check-indicator {
+  display: grid;
+  place-items: center;
+  width: 14px;
+  height: 14px;
+  border: 1px solid #52697f;
+  border-radius: 3px;
+  color: #09202a;
+  font-size: 0.65rem;
+  font-weight: 800;
+}
+
+.selected .check-indicator {
+  border-color: var(--cyan);
+  background: var(--cyan);
+}
+
+.check-indicator.checked {
+  border-color: var(--cyan);
+  background: var(--cyan);
+}
+
+.ai-option {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  margin-top: 0.9rem;
+}
+
+.ai-option .check-pill {
+  flex: 0 0 auto;
+}
+
+.ai-option p {
+  margin: 0;
+  color: #74899f;
+  font-size: 0.66rem;
+  line-height: 1.5;
+}
+
+.form-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
