@@ -136,3 +136,69 @@ def fetch_customer(customer_id: int):
         self.assertTrue(all(finding["line_start"] > 0 and finding["evidence"] for finding in findings))
         india_findings = [finding for finding in findings if finding["jurisdiction"] == "India DPDP"]
         self.assertTrue(india_findings)
+        self.assertTrue(all(finding["relevant_legal_reference"] is None for finding in india_findings))
+
+    def test_parameterized_sql_is_not_reported_and_interpolated_sql_is(self):
+        safe = """
+def get_user(cursor, user_id):
+    cursor.execute("SELECT * FROM users WHERE id = %s", (user_id,))
+"""
+        unsafe = """
+def get_user(cursor, user_id):
+    query = f"SELECT * FROM users WHERE id = {user_id}"
+    cursor.execute(query)
+"""
+        self.assertNotIn("SECURITY.SQL_INJECTION", self._rule_ids("db.py", safe))
+        self.assertIn("SECURITY.SQL_INJECTION", self._rule_ids("db.py", unsafe))
+
+    def test_python_logging_secrets_and_personal_literal_are_redacted(self):
+        source = """
+api_key = "sk-example-123456789"
+def report(user):
+    logger.info("customer=%s email=%s", user, user.email)
+    return "owner@example.org"
+"""
+        findings, _, _ = analyze_source_file("service.py", source, ["UK GDPR"])
+        rule_ids = {finding["rule_id"] for finding in findings}
+        self.assertIn("SECURITY.HARDCODED_SECRET", rule_ids)
+        self.assertIn("PRIVACY.SENSITIVE_LOGGING", rule_ids)
+        self.assertIn("PRIVACY.PERSONAL_DATA_FIELD", rule_ids)
+        rendered = json.dumps(findings)
+        self.assertNotIn("sk-example-123456789", rendered)
+        self.assertNotIn("owner@example.org", rendered)
+
+    def test_javascript_typescript_sql_and_safe_variants(self):
+        unsafe_js = """
+app.post('/users', (req, res) => {
+  console.log(req.body);
+  db.query(`SELECT * FROM users WHERE id = ${req.body.id}`);
+});
+"""
+        safe_js = """
+app.post('/users', requireAuth, (req, res) => {
+  const email = req.body.email;
+  logger.info('request complete');
+  db.query('SELECT * FROM users WHERE id = ?', [req.body.id]);
+});
+"""
+        unsafe_ids = self._rule_ids("server.js", unsafe_js)
+        safe_ids = self._rule_ids("server.js", safe_js)
+        self.assertIn("SECURITY.SQL_INJECTION", unsafe_ids)
+        self.assertIn("PRIVACY.SENSITIVE_LOGGING", unsafe_ids)
+        self.assertIn("PRIVACY.PERSONAL_DATA_FIELD", safe_ids)
+        self.assertNotIn("PRIVACY.SENSITIVE_LOGGING", safe_ids)
+        self.assertNotIn("SECURITY.SQL_INJECTION", safe_ids)
+
+    def test_sql_data_minimization_signal_and_json_yaml_schema_parsing(self):
+        sql_ids = self._rule_ids("schema.sql", "SELECT * FROM customers;")
+        json_ids = self._rule_ids("schema.json", '{"properties": {"emailAddress": {"type": "string"}}}')
+        yaml_ids = self._rule_ids("schema.yaml", "properties:\n  aadhaar_number:\n    type: string\n")
+        self.assertIn("API.BROAD_DATA_RESPONSE", sql_ids)
+        self.assertIn("PRIVACY.PERSONAL_DATA_FIELD", json_ids)
+        self.assertIn("PRIVACY.PERSONAL_DATA_FIELD", yaml_ids)
+
+    def test_malformed_and_unsupported_files_are_marked_not_silently_scanned(self):
+        _, method, status = analyze_source_file("invalid.py", "def broken(:", ["UK GDPR"])
+        self.assertEqual((method, status), ("python-ast", "parse_error"))
+        _, method, status = analyze_source_file("Something.java", "class A {}", ["UK GDPR"])
+        self.assertEqual((method, status), ("unsupported", "unsupported"))
