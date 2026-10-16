@@ -368,3 +368,69 @@ function App() {
               </div>
               <div className="scan-metadata">
                 <div className="status-summary" aria-label="Finding status counts">
+                  <span>{result.summary.status_counts.potential_issue} potential issue</span>
+                  <span>{result.summary.status_counts.requires_manual_review} manual review</span>
+                  <span>Rule catalog {Object.values(result.summary.compliance_mapping_versions)[0] ?? 'unknown'}</span>
+                  <span>{result.summary.semgrep_available ? 'Semgrep enabled' : 'Semgrep unavailable'}</span>
+                  {result.summary.ai_explanations_requested ? (
+                    <span>{result.summary.ai_findings_enriched ?? 0} AI-enriched findings</span>
+                  ) : null}
+                  {result.summary.ml_triage?.available ? (
+                    <span>ML triage v{result.summary.ml_triage.model_version}: {result.summary.ml_triage.findings_classified} findings</span>
+                  ) : <span>ML triage model not trained yet</span>}
+                </div>
+                {Object.entries(result.summary.compliance_notices).map(([jurisdiction, notice]) => (
+                  <p className="compliance-notice" key={jurisdiction}><strong>{jurisdiction}:</strong> {notice}</p>
+                ))}
+                {result.summary.unsupported_file_samples.length > 0 ? (
+                  <details className="unsupported-files">
+                    <summary>Unsupported files were not analyzed ({result.summary.files_unsupported})</summary>
+                    <ul>{result.summary.unsupported_file_samples.map((path) => <li key={path}><code>{path}</code></li>)}</ul>
+                  </details>
+                ) : null}
+                {Object.keys(result.summary.analysis_methods).length > 0 ? (
+                  <p className="analysis-methods">
+                    Analyzers: {Object.entries(result.summary.analysis_methods).map(([method, count]) => `${method} (${count})`).join(' · ')}
+                  </p>
+                ) : null}
+              </div>
+
+              <div className="severity-grid" aria-label="Finding severity counts">
+                {SEVERITY_ORDER.map((level) => (
+                  <button
+                    type="button"
+                    key={level}
+                    className={`severity-card ${level} ${severityFilter === level ? 'active' : ''}`}
+                    onClick={() => setSeverityFilter((current) => current === level ? 'all' : level)}
+                    aria-pressed={severityFilter === level}
+                  >
+                    <span className={`severity-dot ${level}`} />
+                    <span>{level}</span>
+                    <strong>{result.summary.severity_counts[level] ?? 0}</strong>
+                  </button>
+                ))}
+              </div>
+
+              {result.warnings.length > 0 ? (
+                <div className="warning-box">
+                  <strong>Scan notes</strong>
+                  <ul>{result.warnings.map((warning, index) => <li key={`${warning}-${index}`}>{warning}</li>)}</ul>
+                </div>
+              ) : null}
+
+              <div className="findings-heading">
+                <div>
+                  <h3>Findings <span>{filteredFindings.length}</span></h3>
+                  <p>{severityFilter !== 'all' || query.trim()
+                    ? `Showing ${filteredFindings.length} of ${result.findings.length} findings. `
+                    : ''}Review the evidence and recommended next steps.</p>
+                </div>
+                <div className="finding-filters">
+                  <label htmlFor="finding-search" className="sr-only">Search findings</label>
+                  <input
+                    id="finding-search"
+                    type="search"
+                    value={query}
+                    onChange={(event) => setQuery(event.target.value)}
+                    placeholder="Search findings"
+                  />
