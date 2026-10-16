@@ -178,3 +178,68 @@ def _python_analysis(file_path: str, source: str, jurisdictions: list[str]) -> t
 
     personal_nodes: list[ast.AST] = []
     sensitive_nodes: list[ast.AST] = []
+    personal_model_classes: set[str] = set()
+    sensitive_model_classes: set[str] = set()
+    routes: list[ast.FunctionDef | ast.AsyncFunctionDef] = []
+    for node in ast.walk(root):
+        if isinstance(node, (ast.ClassDef,)):
+            bases = " ".join(ast.unparse(base) for base in node.bases).lower()
+            decorators = " ".join(ast.unparse(item) for item in node.decorator_list).lower()
+            is_model = any(name in bases for name in ("basemodel", "model", "declarativebase", "mappedas")) or "dataclass" in decorators
+            if not is_model and re.search(r"\bbase\b", bases):
+                is_model = any(
+                    isinstance(child, (ast.AnnAssign, ast.Assign))
+                    and re.search(r"\b(?:column|mapped|relationship)\b", ast.unparse(child), re.I)
+                    for child in node.body
+                )
+            if is_model:
+                for child in node.body:
+                    if isinstance(child, (ast.AnnAssign, ast.Assign)):
+                        targets = [child.target] if isinstance(child, ast.AnnAssign) else child.targets
+                        for target in targets:
+                            for subnode in ast.walk(target):
+                                if _is_model_field(subnode):
+                                    personal_nodes.append(subnode)
+                                    personal_model_classes.add(node.name)
+                                if _is_sensitive_field(subnode):
+                                    sensitive_nodes.append(subnode)
+                                    sensitive_model_classes.add(node.name)
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            decorator_text = " ".join(ast.unparse(decorator) for decorator in node.decorator_list)
+            if ROUTE_RE.search(decorator_text):
+                routes.append(node)
+            for argument in [*node.args.posonlyargs, *node.args.args, *node.args.kwonlyargs]:
+                if _is_model_field(argument):
+                    personal_nodes.append(argument)
+                if _is_sensitive_field(argument):
+                    sensitive_nodes.append(argument)
+        if isinstance(node, ast.Dict):
+            for key in node.keys:
+                if key and _is_model_field(key):
+                    personal_nodes.append(key)
+                if key and _is_sensitive_field(key):
+                    sensitive_nodes.append(key)
+        if isinstance(node, (ast.Assign, ast.AnnAssign, ast.NamedExpr)):
+            targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+            for target in targets:
+                for subnode in ast.walk(target):
+                    if isinstance(subnode, (ast.Name, ast.Attribute)):
+                        if _is_model_field(subnode):
+                            personal_nodes.append(subnode)
+                        if _is_sensitive_field(subnode):
+                            sensitive_nodes.append(subnode)
+
+    for node in personal_nodes:
+        for jurisdiction in jurisdictions:
+            add("PRIVACY.PERSONAL_DATA_FIELD", node, jurisdiction)
+    for node in sensitive_nodes:
+        for jurisdiction in jurisdictions:
+            add("PRIVACY.SENSITIVE_DATA_FIELD", node, jurisdiction)
+
+    for node in ast.walk(root):
+        if isinstance(node, ast.Call):
+            call_name = ast.unparse(node.func).lower()
+            rendered = ast.unparse(node)
+            safely_transformed = bool(re.search(r"\b(?:redact|mask|sanitize|hash|hmac)\s*\(", rendered, re.I))
+            # Flag secret literals, but never include their value in report evidence.
+            for keyword in node.keywords:
