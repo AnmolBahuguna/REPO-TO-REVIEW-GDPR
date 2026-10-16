@@ -202,3 +202,69 @@ app.post('/users', requireAuth, (req, res) => {
         self.assertEqual((method, status), ("python-ast", "parse_error"))
         _, method, status = analyze_source_file("Something.java", "class A {}", ["UK GDPR"])
         self.assertEqual((method, status), ("unsupported", "unsupported"))
+
+    def test_redaction_removes_personal_identifiers_and_secrets(self):
+        evidence = redact_evidence(
+            'api_key = "credential-long-value"; email="alice@example.org"; pan="ABCDE1234F"; phone=+441234567890'
+        )
+        for raw in ("credential-long-value", "alice@example.org", "ABCDE1234F", "+441234567890"):
+            self.assertNotIn(raw, evidence)
+
+    def test_catalog_contains_all_required_rule_metadata(self):
+        required = {
+            "rule_id", "title", "category", "severity", "confidence", "status", "file_path",
+            "line_start", "line_end", "evidence", "reasoning", "jurisdiction",
+            "relevant_legal_reference", "recommended_fix", "false_positive_notes",
+        }
+        self.assertEqual(CATALOG["catalog_version"], "1.0.0")
+        for rule in CATALOG["rules"]:
+            self.assertTrue(all(rule.get(field) is not None for field in (
+                "title", "category", "severity", "confidence", "status", "reasoning",
+                "recommended_fix", "false_positive_notes",
+            )))
+        finding = build_finding(
+            "PRIVACY.PERSONAL_DATA_FIELD",
+            file_path="app.py",
+            line_start=2,
+            line_end=2,
+            evidence="email: str",
+            jurisdiction="UK GDPR",
+        )
+        self.assertTrue(required <= finding.keys())
+
+
+class DatasetTests(unittest.TestCase):
+    def test_dataset_loader_validates_labels_and_reports_schema(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "seed.jsonl"
+            path.write_text(
+                "\n".join([
+                    json.dumps({"code": "email = request.email", "label": "positive", "language": "python", "category": "personal", "group_id": "email-family"}),
+                    json.dumps({"snippet": "logger.info('ok')", "label": "negative", "language": "python", "category": "logging", "group_id": "logging-family"}),
+                    json.dumps({"source": "return payload", "label": "requires_context", "language": "javascript", "category": "api", "group_id": "api-family"}),
+                ]),
+                encoding="utf-8",
+            )
+            examples = load_dataset(path)
+            report = validate_dataset(path)
+        self.assertEqual(len(examples), 3)
+        self.assertEqual(report["labels"]["positive"], 1)
+        self.assertEqual(report["group_ids"], 3)
+
+    def test_dataset_loader_rejects_unknown_labels(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "invalid.jsonl"
+            path.write_text('{"code":"pass","label":"maybe"}\n', encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "invalid label"):
+                load_dataset(path)
+
+    def test_grouped_evaluation_keeps_related_variants_in_one_split(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "examples.jsonl"
+            records = [
+                {"code": "email = request.email", "label": "positive", "language": "python", "category": "personal", "group_id": "personal-pair"},
+                {"code": "contact_email = body.email", "label": "positive", "language": "python", "category": "personal", "group_id": "personal-pair"},
+                {"code": "logger.info('started')", "label": "negative", "language": "python", "category": "logging", "group_id": "safe-log"},
+                {"code": "logger.info('complete')", "label": "negative", "language": "python", "category": "logging", "group_id": "safe-log"},
+                {"code": "return payload", "label": "requires_context", "language": "python", "category": "api", "group_id": "context-case"},
+            ]
