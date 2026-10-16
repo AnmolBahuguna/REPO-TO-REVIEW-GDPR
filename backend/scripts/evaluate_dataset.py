@@ -99,3 +99,63 @@ def evaluate(path: Path) -> dict[str, Any]:
             unsupported += 1
             continue
         if example.label == "requires_context":
+            excluded_context += 1
+            context_correct += predicted == "requires_context"
+            continue
+        rows.append({
+            "actual": example.label,
+            "predicted": predicted,
+            "language": example.language,
+            "category": example.category,
+            "detected_categories": sorted(detected_categories),
+        })
+
+    by_category: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    by_language: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for row in rows:
+        by_category[row["category"]].append(row)
+        by_language[row["language"]].append(row)
+
+    return {
+        "evaluation_version": "1.0.0",
+        "dataset": str(path),
+        "dataset_validation": validate_dataset(path),
+        "split": {
+            "strategy": "deterministic grouped holdout",
+            "seed": SEED,
+            "development_groups_not_used_for_model_training": len({example.group_id for example in train}),
+            "held_out_groups": len({example.group_id for example in held_out}),
+            "development_records_not_used_for_model_training": len(train),
+            "held_out_records": len(held_out),
+            "related_variants_kept_together": True,
+        },
+        "metrics": _binary_metrics(rows),
+        "by_category": {key: _binary_metrics(value) for key, value in sorted(by_category.items())},
+        "by_language": {key: _binary_metrics(value) for key, value in sorted(by_language.items())},
+        "requires_context_records_excluded_from_binary_metrics": excluded_context,
+        "requires_context_records_correctly_flagged_for_review": context_correct,
+        "requires_context_review_rate": context_correct / excluded_context if excluded_context else None,
+        "unsupported_or_unparseable_records": unsupported,
+        "caveat": "Curated synthetic seed results are not production accuracy, legal validation, or generalization proof.",
+    }
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description="Run grouped held-out evaluation on a labeled JSONL/CSV dataset.")
+    parser.add_argument("dataset", type=Path, help="Path to a labeled .jsonl or .csv dataset")
+    parser.add_argument("--output", type=Path, help="Optional JSON output path")
+    args = parser.parse_args()
+    try:
+        result = evaluate(args.dataset)
+    except (FileNotFoundError, ValueError) as exc:
+        parser.error(str(exc))
+        return 2
+    rendered = json.dumps(result, indent=2, sort_keys=True)
+    if args.output:
+        args.output.write_text(rendered + "\n", encoding="utf-8")
+    print(rendered)
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
