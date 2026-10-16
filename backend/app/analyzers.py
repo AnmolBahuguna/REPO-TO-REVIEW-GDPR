@@ -571,3 +571,26 @@ def _offset_for_line(source: str, line: int) -> int:
 
 def analyze_source_file(
     file_path: str,
+    source: str,
+    jurisdictions: list[str],
+) -> tuple[list[dict[str, Any]], str, str]:
+    extension = file_path.rsplit(".", 1)[-1].lower() if "." in file_path else ""
+    if extension == "py":
+        findings, status = _python_analysis(file_path, source, jurisdictions)
+        return findings, "python-ast", status
+    if extension in {"js", "jsx", "mjs", "cjs"}:
+        findings, status = _tree_sitter_analysis("javascript", file_path, source, jurisdictions)
+        return findings, "tree-sitter-javascript", status
+    if extension in {"ts", "mts", "cts"}:
+        findings, status = _tree_sitter_analysis("typescript", file_path, source, jurisdictions)
+        return findings, "tree-sitter-typescript", status
+    if extension == "tsx":
+        findings, status = _tree_sitter_analysis("tsx", file_path, source, jurisdictions)
+        return findings, "tree-sitter-tsx", status
+    if extension == "sql":
+        findings, status = _tree_sitter_analysis("sql", file_path, source, jurisdictions)
+        return findings, "tree-sitter-sql", status
+    if extension in {"json", "yaml", "yml"}:
+        findings, status = _schema_analysis(file_path, source, jurisdictions)
+        return findings, "json-schema" if extension == "json" else "yaml-schema", status
+    return [], "unsupported", "unsupported"
