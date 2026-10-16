@@ -1290,3 +1290,69 @@ input::placeholder { color: #91a29e; }
 .unsupported-files summary { color: #806b2b; }
 .unsupported-files ul { color: #667a74; }
 .severity-grid { gap: .75rem; margin-top: .85rem; }
+.severity-card { min-height: 57px; border-color: #e0e8e4; border-radius: 10px; color: #526761; background: #fff; transition: border-color .15s ease, box-shadow .15s ease, transform .15s ease; }
+.severity-card:hover { transform: translateY(-1px); box-shadow: 0 5px 14px rgba(24, 56, 49, .06); }
+.severity-card.active { background: #f7fbf9; box-shadow: 0 0 0 2px currentColor inset; }
+.severity-card strong { color: #223c37; }
+.severity-card.critical { color: #b84750; }
+.severity-card.high { color: #ad5b22; }
+.severity-card.medium { color: #94751a; }
+.severity-card.low { color: #3976a9; }
+.severity-dot.critical { background: #cf5862; }
+.severity-dot.high { background: #ca7837; }
+.severity-dot.medium { background: #b89a31; }
+.severity-dot.low { background: #548fbe; }
+.warning-box { border-color: #eadca9; color: #755e1e; background: #fff9e9; }
+.warning-box ul { color: #756b45; }
+.findings-heading { margin-top: 2.2rem; }
+.findings-heading h3 { color: #203a36; font-size: 1.08rem; }
+.findings-heading h3 span { color: #71847e; }
+.findings-heading p { color: #748680; }
+.finding-filters input { min-height: 40px; }
+.findings-list { gap: .85rem; }
+.finding-card { gap: 1rem; border-color: #e0e8e4; border-radius: 12px; padding: 1.2rem 1.25rem; background: #fff; box-shadow: 0 4px 14px rgba(24, 56, 49, .035); }
+.finding-card h4 { color: #203936; font-size: .94rem; }
+.badge { border-radius: 5px; }
+.badge.critical { color: #a93d47; background: #fbecee; }
+.badge.high { color: #9b501a; background: #fff1e5; }
+.badge.medium { color: #816913; background: #fbf5dc; }
+.badge.low { color: #346b9b; background: #eaf3fb; }
+.category, .jurisdiction { color: #687d77; }
+.finding-location { color: #72847e; }
+.finding-location code { color: #16796d; }
+.source-link { display: inline-flex; align-items: center; gap: .28rem; color: #16796d; text-decoration: none; }
+.source-link:hover { color: #075e55; text-decoration: underline; }
+.source-link span { font-size: .65rem; }
+.legal-basis { color: #566c65; font-size: .73rem; line-height: 1.65; }
+.legal-reference { color: #667b74; }
+.legal-reference a, .legal-reference a:visited { color: #087e73; }
+.status-tag.potential_issue { color: #ae454e; }
+.status-tag.requires_manual_review { color: #92741a; }
+.status-tag.no_issue_detected_by_rule { color: #267360; }
+.evidence-details summary { color: #087e73; }
+.evidence-details summary span { color: #82928d; }
+.evidence-box { border-color: #e1e9e5; border-radius: 8px; background: #f5f8f7; }
+.evidence-box code { color: #344d47; }
+.recommendation { color: #536b64; font-size: .73rem; }
+.recommendation strong { color: #27695f; }
+.ai-explanation { color: #536b64; }
+.ai-explanation strong { color: #3a6d91; }
+.false-positive-notes { color: #71827d; }
+.false-positive-notes strong { color: #566d66; }
+.empty-state { border-color: #d5e2dd; border-radius: 12px; background: #fbfdfc; }
+.empty-state > span { color: #087e73; background: #e7f4f0; }
+.empty-state strong { color: #29443e; }
+.empty-state p { color: #6c8079; }
+.footer { border-color: #e0e9e5; color: #7b8b86; }
+.footer span:first-child { color: #48645d; }
+
+@media (max-width: 700px) {
+  .page-shell { padding: 0 1rem 1.25rem; }
+  .hero { padding: 2.5rem 0 2rem; }
+  .hero-art { opacity: .2; }
+  .scan-panel { padding: 1.25rem; }
+  .summary-card { min-height: 102px; }
+}
+
+@media (max-width: 480px) {
+  .topbar { height: 64px; }
