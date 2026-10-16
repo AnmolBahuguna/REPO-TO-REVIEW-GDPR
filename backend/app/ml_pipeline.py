@@ -93,3 +93,69 @@ def train_and_save(examples: list[DatasetExample], dataset_path: Path, model_pat
     model = make_model()
     model.fit([item.code for item in train], [item.label for item in train])
 
+    # Validation is reported for iteration; final test is reported once and never used to fit.
+    validation_metrics = _metrics([item.label for item in validation], model.predict([item.code for item in validation]).tolist())
+    test_metrics = _metrics([item.label for item in held_out], model.predict([item.code for item in held_out]).tolist())
+    # Refit the deployable model on all development data after the test score is fixed.
+    development = train + validation
+    model.fit([item.code for item in development], [item.label for item in development])
+    model_path.parent.mkdir(parents=True, exist_ok=True)
+    dataset_hash = hashlib.sha256(dataset_path.read_bytes()).hexdigest()
+    bundle = {
+        "model": model,
+        "metadata": {
+            "model_version": "1.0.0",
+            "dataset_sha256": dataset_hash,
+            "dataset_records": len(examples),
+            "train_records": len(train),
+            "validation_records": len(validation),
+            "test_records": len(held_out),
+            "development_groups": len({item.group_id for item in development}),
+            "test_groups": len({item.group_id for item in held_out}),
+            "labels": list(LABELS),
+            "features": "word and character TF-IDF n-grams; balanced logistic regression",
+            "split": "grouped 60/20/20; group IDs never cross splits",
+            "seed": SEED,
+            "metrics": {"validation": validation_metrics, "test": test_metrics},
+            "caveat": "Metrics reflect only this supplied dataset; they are not legal validation or production accuracy.",
+        },
+    }
+    joblib.dump(bundle, model_path)
+    return bundle["metadata"]
+
+
+def load_model(model_path: str | Path) -> dict[str, Any] | None:
+    path = Path(model_path)
+    if not path.is_file():
+        return None
+    return joblib.load(path)
+
+
+def predict_text(bundle: dict[str, Any], code: str) -> dict[str, Any]:
+    model: Pipeline = bundle["model"]
+    probabilities = model.predict_proba([code])[0]
+    classes = model.named_steps["classifier"].classes_
+    ranked = sorted(zip(classes, probabilities), key=lambda item: float(item[1]), reverse=True)
+    return {
+        "label": str(ranked[0][0]),
+        "top_class_score": float(ranked[0][1]),
+        "probabilities": {str(label): float(probability) for label, probability in zip(classes, probabilities)},
+        "model_version": bundle["metadata"]["model_version"],
+        "caveat": "Model probabilities are uncalibrated triage scores; review code and rule-based findings. This is not a legal determination.",
+    }
+
+
+def predict_many(bundle: dict[str, Any], texts: list[str]) -> list[dict[str, Any]]:
+    if not texts:
+        return []
+    model: Pipeline = bundle["model"]
+    probabilities = model.predict_proba(texts)
+    classes = model.named_steps["classifier"].classes_
+    predictions = []
+    for row in probabilities:
+        ranked = sorted(zip(classes, row), key=lambda item: float(item[1]), reverse=True)
+        predictions.append({
+            "label": str(ranked[0][0]),
+            "top_class_score": float(ranked[0][1]),
+            "probabilities": {str(label): float(probability) for label, probability in zip(classes, row)},
+            "model_version": bundle["metadata"]["model_version"],
