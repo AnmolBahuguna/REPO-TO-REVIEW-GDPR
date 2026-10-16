@@ -172,3 +172,68 @@ function App() {
     if (!result) return;
     const blob = new Blob([JSON.stringify(result, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = `${result.repo.owner}-${result.repo.name}-privacy-report.json`;
+    anchor.click();
+    URL.revokeObjectURL(url);
+  }
+
+  function resetFindingFilters() {
+    setQuery('');
+    setSeverityFilter('all');
+  }
+
+  function sourceUrl(finding: Finding) {
+    const branch = encodeURI(result?.repo.default_branch ?? 'main');
+    const path = finding.file_path.split('/').map(encodeURIComponent).join('/');
+    return `${result?.repo.url}/blob/${branch}/${path}#L${finding.line_start}`;
+  }
+
+  return (
+    <div className="page-shell" data-theme={theme}>
+      <div className="container">
+        <header className="topbar">
+          <a className="brand" href="/" aria-label="Code-to-GDPR home">
+            <span className="brand-mark" aria-hidden="true">P</span>
+            <span>Privacy Lens</span>
+          </a>
+          <span className="topbar-note">Open-source repository review</span>
+          <button
+            className="theme-toggle"
+            type="button"
+            onClick={() => setTheme((current) => current === 'light' ? 'dark' : 'light')}
+            aria-label={`Switch to ${theme === 'light' ? 'dark' : 'light'} theme`}
+            aria-pressed={theme === 'dark'}
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              {theme === 'light'
+                ? <path d="M20.1 15.5A8.5 8.5 0 0 1 8.5 3.9 8.5 8.5 0 1 0 20.1 15.5Z" />
+                : <><circle cx="12" cy="12" r="4" /><path d="M12 2v2m0 16v2M4.93 4.93l1.42 1.42m11.3 11.3 1.42 1.42M2 12h2m16 0h2M4.93 19.07l1.42-1.42m11.3-11.3 1.42-1.42" /></>}
+            </svg>
+            <span>{theme === 'light' ? 'Dark mode' : 'Light mode'}</span>
+          </button>
+        </header>
+
+        <main>
+          <section className="hero">
+            <div className="hero-copy">
+              <p className="eyebrow"><span className="eyebrow-dot" /> STATIC PRIVACY ANALYSIS</p>
+              <h1>Find privacy signals<br /><span>before they become risks.</span></h1>
+              <p className="hero-description">
+                Review a public GitHub repository for potential personal-data handling,
+                sensitive data, logging, and access-control patterns.
+              </p>
+              <div className="jurisdiction-tags" aria-label="Supported jurisdictions">
+                <span>UK GDPR</span><span>India DPDP</span>
+              </div>
+            </div>
+            <div className="hero-art" aria-hidden="true">
+              <div className="art-orbit orbit-one" />
+              <div className="art-orbit orbit-two" />
+              <div className="art-shield">
+                <svg viewBox="0 0 64 72" role="presentation">
+                  <path d="M32 4 55 13v18c0 16-9.8 28.8-23 36C18.8 59.8 9 47 9 31V13L32 4Z" />
+                  <path d="m22 35 7 7 14-15" />
+                </svg>
+              </div>
