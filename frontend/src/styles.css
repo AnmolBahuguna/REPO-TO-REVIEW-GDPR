@@ -962,3 +962,69 @@ input::placeholder {
 
 .evidence-details {
   margin-top: 0.65rem;
+}
+
+.evidence-details summary {
+  width: fit-content;
+  color: #77cbc6;
+  cursor: pointer;
+  font-size: 0.69rem;
+  list-style-position: inside;
+}
+
+.evidence-details summary span {
+  margin-left: 0.2rem;
+  color: #71879d;
+}
+
+.evidence-box {
+  display: grid;
+  gap: 0.4rem;
+  margin-top: 0.55rem;
+  border: 1px solid rgba(145, 169, 195, 0.12);
+  border-radius: 6px;
+  padding: 0.7rem;
+  overflow-x: auto;
+  background: rgba(4, 15, 28, 0.62);
+}
+
+.evidence-box code {
+  color: #c4d3e1;
+  font-family: 'SFMono-Regular', Consolas, monospace;
+  font-size: 0.65rem;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.recommendation {
+  display: grid;
+  gap: 0.2rem;
+  margin: 0.75rem 0 0;
+  color: #9fb5c9;
+  font-size: 0.71rem;
+  line-height: 1.55;
+}
+
+.recommendation strong {
+  color: #c0dedc;
+  font-size: 0.67rem;
+}
+
+.ai-explanation,
+.false-positive-notes {
+  display: grid;
+  gap: 0.2rem;
+  margin: 0.65rem 0 0;
+  color: #a1b4c6;
+  font-size: 0.68rem;
+  line-height: 1.55;
+}
+
+.ai-explanation strong {
+  color: #a7cbf2;
+  font-size: 0.66rem;
+}
+
+.false-positive-notes {
+  color: #8398ac;
