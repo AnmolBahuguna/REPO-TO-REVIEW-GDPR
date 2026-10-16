@@ -110,3 +110,14 @@ python scripts/train_model.py data/code_to_gdpr_seed_dataset.jsonl
 
 The trained artifact is written to `backend/artifacts/privacy_triage.joblib` (ignored by git). Classify a source file with it:
 
+```powershell
+python scripts/predict_model.py path\to\sample.py
+```
+
+The existing rule-engine evaluation remains available separately:
+
+```powershell
+python scripts/evaluate_dataset.py data/code_to_gdpr_seed_dataset.jsonl --output evaluation.json
+```
+
+Training reports per-label precision/recall/F1, macro F1, accuracy, and a confusion matrix for validation and held-out test records. All examples in a group stay together. The older evaluation script measures the existing rule engine; it is not the ML model evaluation. Small or synthetic datasets do not establish production performance.
