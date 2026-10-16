@@ -374,3 +374,69 @@ def _tree_sitter_analysis(
         node = stack.pop()
         if node.child_count == 0 and node.type in {
             "identifier", "property_identifier", "shorthand_property_identifier",
+            "shorthand_property_identifier_pattern", "type_identifier",
+        }:
+            named_nodes.append(node)
+        if node.child_count == 0 and node.type in {"string", "string_literal", "template_string"}:
+            string_nodes.append(node)
+        stack.extend(reversed(node.children))
+
+    for node in named_nodes:
+        token = node.text.decode("utf-8", errors="replace")
+        normalized = re.sub(r"([a-z0-9])([A-Z])", r"\1_\2", token).lower()
+        line = node.start_point.row + 1
+        line_text = source_lines[line - 1] if line <= len(source_lines) else ""
+        # Only treat an identifier as data evidence in field-like or data-flow contexts.
+        field_context = node.type in {
+            "property_identifier", "shorthand_property_identifier",
+            "shorthand_property_identifier_pattern", "type_identifier",
+        } or re.search(r"(?i)(?:schema|model|payload|request|body|customer|user|profile|column|field)", line_text)
+        if field_context and PERSONAL_RE.search(normalized):
+            for jurisdiction in jurisdictions:
+                add("PRIVACY.PERSONAL_DATA_FIELD", line, jurisdiction)
+        if field_context and SENSITIVE_RE.search(normalized):
+            for jurisdiction in jurisdictions:
+                add("PRIVACY.SENSITIVE_DATA_FIELD", line, jurisdiction)
+
+    for node in string_nodes:
+        token = node.text.decode("utf-8", errors="replace")
+        for label, pattern in PERSONAL_VALUE_PATTERNS.items():
+            if pattern.search(token):
+                for jurisdiction in jurisdictions:
+                    add(
+                        "PRIVACY.PERSONAL_DATA_FIELD",
+                        node.start_point.row + 1,
+                        jurisdiction,
+                        confidence=0.86,
+                        reasoning=f"A source string contains a value shaped like a {label}. The value is redacted in the report; confirm whether it is real, synthetic, or a test fixture.",
+                        evidence_kind="literal_data_indicator",
+                    )
+
+    # Parse-aware route and flow checks. Tree-sitter ensures the file is syntactically
+    # represented; these bounded checks are review signals, not complete taint proofs.
+    if language in {"javascript", "typescript", "tsx"}:
+        for line_index, line_text in enumerate(source_lines, start=1):
+            if SECRET_NAME_RE.search(line_text):
+                match = re.search(r"(?i)(?:password|passwd|secret|api[-_]?key|access[-_]?token|private[-_]?key)\s*[:=]\s*(['\"`])([^'\"`]+)\1", line_text)
+                if match and len(match.group(2)) >= 8 and not PLACEHOLDER_RE.fullmatch(match.group(2)):
+                    add("SECURITY.HARDCODED_SECRET", line_index, "General security review")
+            if SQL_RE.search(line_text) and SQL_INTERPOLATION_RE.search(line_text):
+                add("SECURITY.SQL_INJECTION", line_index, "General security review")
+            if OUTBOUND_RE.search(line_text) and (PERSONAL_RE.search(line_text) or SENSITIVE_RE.search(line_text)):
+                for jurisdiction in jurisdictions:
+                    add("PRIVACY.PERSONAL_DATA_EGRESS", line_index, jurisdiction)
+            if re.search(r"\b(?:throw\s+new\s+Error|res\.status|HttpException)\b", line_text) and re.search(
+                r"(?i)(?:request|req\.body|payload|user|customer|exception|error)", line_text
+            ):
+                add("PRIVACY.UNSAFE_EXCEPTION", line_index, "General security review")
+
+        nodes = _walk_tree(tree.root_node)
+        for call_node in nodes:
+            if call_node.type != "call_expression":
+                continue
+            call_source = source_bytes[call_node.start_byte:call_node.end_byte].decode("utf-8", errors="replace")
+            line = call_node.start_point.row + 1
+            safely_transformed = bool(re.search(r"\b(?:redact|mask|sanitize|hash|hmac)\s*\(", call_source, re.I))
+            argument_identifiers = " ".join(
+                descendant.text.decode("utf-8", errors="replace")
+                for descendant in _walk_tree(call_node)
