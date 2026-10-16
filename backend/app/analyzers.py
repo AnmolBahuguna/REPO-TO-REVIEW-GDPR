@@ -243,3 +243,69 @@ def _python_analysis(file_path: str, source: str, jurisdictions: list[str]) -> t
             safely_transformed = bool(re.search(r"\b(?:redact|mask|sanitize|hash|hmac)\s*\(", rendered, re.I))
             # Flag secret literals, but never include their value in report evidence.
             for keyword in node.keywords:
+                if SECRET_NAME_RE.search(keyword.arg or "") and isinstance(keyword.value, ast.Constant) and isinstance(keyword.value.value, str):
+                    if len(keyword.value.value) >= 8 and not PLACEHOLDER_RE.fullmatch(keyword.value.value):
+                        add("SECURITY.HARDCODED_SECRET", node, "General security review")
+            if isinstance(node.func, ast.Attribute) and node.func.attr.lower() in {"execute", "executemany", "query"} and node.args:
+                query = node.args[0]
+                query_text = ast.unparse(query)
+                effective_query_text = (
+                    dynamic_sql_sources.get(query.id, query_text)
+                    if isinstance(query, ast.Name)
+                    else query_text
+                )
+                dynamic_sql = isinstance(query, (ast.JoinedStr, ast.BinOp)) or (
+                    isinstance(query, ast.Call) and isinstance(query.func, ast.Attribute) and query.func.attr == "format"
+                ) or (isinstance(query, ast.Name) and query.id in dynamic_sql_sources)
+                # Bound execute(sql, params) is safe unless SQL itself is dynamically composed.
+                if SQL_RE.search(effective_query_text) and dynamic_sql:
+                    add("SECURITY.SQL_INJECTION", node, "General security review")
+            if not safely_transformed and re.search(r"(?i)(?:logger|logging|console)\.(?:log|info|warning|warn|error|debug|exception)$|^(?:print|pprint)$", call_name) and any(
+                PERSONAL_RE.search(ast.unparse(arg)) or SENSITIVE_RE.search(ast.unparse(arg))
+                or SECRET_NAME_RE.search(ast.unparse(arg)) or re.search(r"\b(?:request|body|payload|user)\b", ast.unparse(arg), re.I)
+                for arg in node.args
+            ):
+                add("PRIVACY.SENSITIVE_LOGGING", node, "General security review")
+            if OUTBOUND_RE.search(call_name) and any(
+                PERSONAL_RE.search(ast.unparse(arg)) or SENSITIVE_RE.search(ast.unparse(arg))
+                for arg in [*node.args, *(keyword.value for keyword in node.keywords)]
+            ):
+                for jurisdiction in jurisdictions:
+                    add("PRIVACY.PERSONAL_DATA_EGRESS", node, jurisdiction)
+            if call_name.endswith("httpexception") and any(
+                keyword.arg == "detail" and re.search(r"\b(?:exc|exception|request|body|payload)\b", ast.unparse(keyword.value), re.I)
+                for keyword in node.keywords
+            ):
+                add("PRIVACY.UNSAFE_EXCEPTION", node, "General security review")
+
+        if isinstance(node, ast.Assign) and any(
+            isinstance(target, ast.Name) and SECRET_NAME_RE.search(target.id) for target in node.targets
+        ):
+            value = node.value
+            if isinstance(value, ast.Constant) and isinstance(value.value, str):
+                if len(value.value) >= 8 and not PLACEHOLDER_RE.fullmatch(value.value):
+                    add("SECURITY.HARDCODED_SECRET", node, "General security review")
+
+    for function in routes:
+        body = ast.unparse(function)
+        references_personal_model = any(
+            re.search(rf"\b{re.escape(name)}\b", body) for name in personal_model_classes
+        )
+        references_sensitive_model = any(
+            re.search(rf"\b{re.escape(name)}\b", body) for name in sensitive_model_classes
+        )
+        personal_access = (
+            PERSONAL_RE.search(body)
+            or SENSITIVE_RE.search(body)
+            or references_personal_model
+            or references_sensitive_model
+        )
+        if not personal_access:
+            continue
+        decorated = " ".join(ast.unparse(item) for item in function.decorator_list)
+        if AUTH_RE.search(decorated) or AUTH_RE.search(body):
+            continue
+        for jurisdiction in jurisdictions:
+            add("API.UNGUARDED_PERSONAL_ROUTE", function, jurisdiction)
+        if BROAD_QUERY_RE.search(body) or re.search(r"\breturn\b.+\.(?:all|find|fetchall)\s*\(", body, re.I | re.S):
+            add("API.BROAD_DATA_RESPONSE", function, "General security review")
