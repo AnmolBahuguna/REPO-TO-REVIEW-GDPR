@@ -896,3 +896,69 @@ input::placeholder {
   border-left: 1px solid rgba(145, 169, 195, 0.25);
 }
 
+.finding-card h4 {
+  margin: 0.65rem 0 0.45rem;
+  color: #e2ebf5;
+  font-size: 0.88rem;
+  letter-spacing: -0.02em;
+}
+
+.legal-basis {
+  margin: 0;
+  color: #8da1b6;
+  font-size: 0.7rem;
+  line-height: 1.55;
+}
+
+.finding-location {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.45rem;
+  margin: 0 0 0.5rem;
+  color: #8197ad;
+  font-size: 0.62rem;
+}
+
+.finding-location code {
+  color: #9ed6d2;
+}
+
+.finding-location > span {
+  border-left: 1px solid rgba(145, 169, 195, 0.2);
+  padding-left: 0.45rem;
+}
+
+.status-tag {
+  text-transform: capitalize;
+}
+
+.status-tag.potential_issue {
+  color: #ffb3b8;
+}
+
+.status-tag.requires_manual_review {
+  color: #ecd983;
+}
+
+.status-tag.no_issue_detected_by_rule {
+  color: #8dd4bb;
+}
+
+.legal-reference {
+  margin: 0.45rem 0 0;
+  color: #8499ad;
+  font-size: 0.68rem;
+}
+
+.legal-reference a {
+  color: #7fd4ce;
+}
+
+.legal-basis strong {
+  color: #bac9d8;
+  font-weight: 600;
+}
+
+.evidence-details {
+  margin-top: 0.65rem;
