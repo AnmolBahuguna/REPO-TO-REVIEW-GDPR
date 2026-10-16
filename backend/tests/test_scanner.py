@@ -333,3 +333,36 @@ class DatasetTests(unittest.TestCase):
         ):
             count, warning = asyncio.run(enrich_findings([finding]))
 
+        self.assertEqual(count, 1)
+        self.assertIsNone(warning)
+        self.assertEqual(fake_client.request_headers["Authorization"], "Bearer test-openrouter-key")
+        self.assertIn("verify its use", finding["explanation"])
+
+
+class RepositoryScanTests(unittest.TestCase):
+    def test_repository_scan_applies_filters_and_reports_scan_counts(self):
+        repository = {"default_branch": "main", "html_url": "https://github.com/example/project"}
+        tree = {
+            "tree": [
+                {"type": "blob", "path": "src/user.py", "size": 80},
+                {"type": "blob", "path": "node_modules/package/index.js", "size": 20},
+                {"type": "blob", "path": "README.md", "size": 50},
+            ]
+        }
+        with (
+            patch("app.scanner.fetch_json", side_effect=[repository, tree]),
+            patch("app.scanner.fetch_text", return_value="email_address = request.json['email']"),
+            patch("app.scanner.shutil.which", return_value=None),
+        ):
+            result = analyze_repository("https://github.com/example/project", ["UK GDPR"])
+
+        self.assertEqual(result["summary"]["files_scanned"], 1)
+        self.assertEqual(result["summary"]["files_skipped"], 1)
+        self.assertEqual(result["summary"]["files_unsupported"], 1)
+        self.assertEqual(result["summary"]["jurisdictions"], ["UK GDPR"])
+        self.assertTrue(all(finding["jurisdiction"] == "UK GDPR" or finding["jurisdiction"] == "General security review" for finding in result["findings"]))
+        self.assertEqual(result["summary"]["total_findings"], len(result["findings"]))
+
+
+if __name__ == "__main__":
+    unittest.main()
