@@ -389,3 +389,69 @@ def analyze_repository(repo_url: str, jurisdictions: list[str] | None = None) ->
             item["line_start"],
             item["rule_id"],
         ),
+    )
+
+    ml_summary: dict[str, Any] = {
+        "available": False,
+        "model_version": None,
+        "findings_classified": 0,
+        "label_counts": {label: 0 for label in ("positive", "negative", "requires_context")},
+    }
+    try:
+        model_path = Path(__file__).resolve().parents[1] / "artifacts" / "privacy_triage.joblib"
+        bundle = load_model(model_path)
+        if bundle:
+            contexts = []
+            for finding in findings:
+                lines = fetched_sources.get(finding["file_path"], "").splitlines()
+                start = max(0, finding["line_start"] - 6)
+                end = min(len(lines), finding["line_end"] + 5)
+                contexts.append("\n".join(lines[start:end]))
+            predictions = predict_many(bundle, contexts)
+            for finding, prediction in zip(findings, predictions):
+                finding["ml_triage"] = prediction
+                ml_summary["label_counts"][prediction["label"]] += 1
+            ml_summary.update({
+                "available": True,
+                "model_version": bundle["metadata"]["model_version"],
+                "findings_classified": len(predictions),
+                "evaluation_metrics": bundle["metadata"].get("metrics", {}).get("test"),
+            })
+    except Exception:
+        add_warning("The local ML triage model could not be loaded; static rule findings are unchanged.")
+
+    return {
+        "repo": {
+            "owner": owner,
+            "name": repo_name,
+            "default_branch": default_branch,
+            "url": repo_meta.get("html_url", f"https://github.com/{owner}/{repo_name}"),
+        },
+        "summary": {
+            "files_scanned": len(fetched_sources),
+            "files_skipped": skipped,
+            "files_unsupported": unsupported,
+            "unsupported_file_samples": unsupported_samples,
+            "files_parse_failed": len(parse_errors),
+            "analysis_methods": analysis_methods,
+            "total_findings": len(findings),
+            "severity_counts": _rule_counts(findings),
+            "status_counts": {
+                status: sum(finding["status"] == status for finding in findings)
+                for status in ("potential_issue", "requires_manual_review", "no_issue_detected_by_rule")
+            },
+            "jurisdictions": selected_jurisdictions,
+            "compliance_mapping_versions": {
+                name: CATALOG["jurisdictions"][name]["mapping_version"]
+                for name in selected_jurisdictions
+            },
+            "compliance_notices": {
+                name: CATALOG["jurisdictions"][name]["notice"]
+                for name in selected_jurisdictions
+            },
+            "semgrep_available": shutil.which("semgrep") is not None,
+            "ml_triage": ml_summary,
+            "generated_at": datetime.now(timezone.utc).isoformat(),
+        },
+        "findings": findings,
+        "warnings": warnings,
