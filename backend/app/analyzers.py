@@ -112,3 +112,69 @@ def _matching_identifiers(source: str) -> list[tuple[int, int, str, str]]:
             matches.append((match.start(), match.end(), normalized, "personal_data_indicator"))
         if SENSITIVE_RE.search(normalized):
             matches.append((match.start(), match.end(), normalized, "sensitive_data_indicator"))
+    return matches
+
+
+def _is_model_field(node: ast.AST) -> bool:
+    if isinstance(node, (ast.Name, ast.arg, ast.Attribute)):
+        return bool(PERSONAL_RE.search(ast.unparse(node)))
+    if isinstance(node, ast.Constant) and isinstance(node.value, str):
+        return bool(PERSONAL_RE.search(node.value))
+    return False
+
+
+def _is_sensitive_field(node: ast.AST) -> bool:
+    if isinstance(node, (ast.Name, ast.arg, ast.Attribute)):
+        return bool(SENSITIVE_RE.search(ast.unparse(node)))
+    if isinstance(node, ast.Constant) and isinstance(node.value, str):
+        return bool(SENSITIVE_RE.search(node.value))
+    return False
+
+
+def _python_analysis(file_path: str, source: str, jurisdictions: list[str]) -> tuple[list[dict[str, Any]], str]:
+    try:
+        root = ast.parse(source)
+    except SyntaxError:
+        return [], "parse_error"
+
+    findings: list[dict[str, Any]] = []
+    seen: set[tuple[str, int, str]] = set()
+    dynamic_sql_sources: dict[str, str] = {}
+    for assignment in ast.walk(root):
+        if not isinstance(assignment, (ast.Assign, ast.AnnAssign)):
+            continue
+        value = assignment.value
+        if value is None:
+            continue
+        rendered_value = ast.unparse(value)
+        interpolated = isinstance(value, (ast.JoinedStr, ast.BinOp)) or (
+            isinstance(value, ast.Call) and isinstance(value.func, ast.Attribute) and value.func.attr == "format"
+        )
+        if not SQL_RE.search(rendered_value) or not interpolated:
+            continue
+        targets = assignment.targets if isinstance(assignment, ast.Assign) else [assignment.target]
+        dynamic_sql_sources.update(
+            {target.id: rendered_value for target in targets if isinstance(target, ast.Name)}
+        )
+
+    def add(rule_id: str, node: ast.AST, jurisdiction: str, **kwargs: Any) -> None:
+        line = getattr(node, "lineno", 1)
+        key = (rule_id, line, jurisdiction)
+        if key in seen:
+            return
+        seen.add(key)
+        start = max(0, getattr(node, "col_offset", 0))
+        lines = source.splitlines(keepends=True)
+        prefix = sum(len(value) for value in lines[:line - 1])
+        findings.append(_finding(
+            rule_id,
+            file_path,
+            source,
+            prefix + start,
+            prefix + len(lines[line - 1]) if line <= len(lines) else prefix + start + 1,
+            jurisdiction,
+            **kwargs,
+        ))
+
+    personal_nodes: list[ast.AST] = []
+    sensitive_nodes: list[ast.AST] = []
