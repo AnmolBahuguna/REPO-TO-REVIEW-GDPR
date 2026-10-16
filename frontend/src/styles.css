@@ -306,3 +306,68 @@ h1 span {
   fill: none;
   stroke: #7c91a8;
   stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.6;
+}
+
+.url-input-wrap input,
+.finding-filters input {
+  width: 100%;
+  min-height: 49px;
+  border: 1px solid rgba(145, 169, 195, 0.19);
+  border-radius: 8px;
+  background: rgba(4, 15, 28, 0.56);
+  color: #e1edf8;
+  padding: 0.8rem 4rem 0.8rem 2.9rem;
+  font-size: 0.85rem;
+}
+
+input::placeholder {
+  color: #60768c;
+  opacity: 1;
+}
+
+.url-input-wrap input:focus,
+.finding-filters input:focus {
+  border-color: rgba(97, 223, 208, 0.65);
+  outline: none;
+}
+
+.input-hint {
+  position: absolute;
+  right: 0.9rem;
+  color: #5d738b;
+  font-size: 0.61rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+}
+
+.jurisdiction-select {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-top: 1.25rem;
+}
+
+.jurisdiction-select .field-label {
+  margin: 0 0 0.2rem;
+}
+
+.field-help {
+  display: block;
+  color: #72879d;
+  font-size: 0.68rem;
+}
+
+.checkbox-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+}
+
+.check-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 37px;
