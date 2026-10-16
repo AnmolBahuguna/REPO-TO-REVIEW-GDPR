@@ -303,3 +303,68 @@ function App() {
                 />
                 <span className={`check-indicator ${includeExplanations ? 'checked' : ''}`} aria-hidden="true">
                   {includeExplanations ? '✓' : ''}
+                </span>
+                Optional AI explanations and recommendations
+              </label>
+                <p>When enabled, up to 8 redacted finding excerpts are sent to OpenRouter for explanations and engineering recommendations. Repository source code is never sent in bulk.</p>
+            </div>
+            <div className="form-footer">
+              <p><span className="info-icon" aria-hidden="true">i</span> Analysis uses public source files only.</p>
+              <button type="submit" disabled={loading || selectedJurisdictions.length === 0}>
+                {loading ? (
+                  <><span className="spinner" aria-hidden="true" /> Scanning repository</>
+                ) : (
+                  <>Run privacy scan <span aria-hidden="true">→</span></>
+                )}
+              </button>
+            </div>
+          </form>
+
+          <div className="disclaimer">
+            <span aria-hidden="true">ⓘ</span>
+            <p><strong>Signals, not legal advice.</strong> This static analysis may produce false positives or miss issues; review findings with engineering and legal teams.</p>
+          </div>
+
+          {error ? <div className="error-box" role="alert">{error}</div> : null}
+          {loading ? (
+            <div className="loading-state" role="status" aria-live="polite">
+              <span className="spinner" aria-hidden="true" />
+              <span>Reviewing repository files. Larger projects may take a little longer.</span>
+            </div>
+          ) : null}
+
+          {result ? (
+            <section className="results" aria-labelledby="results-title">
+              <div className="results-heading">
+                <div>
+                  <p className="eyebrow">SCAN COMPLETE</p>
+                  <h2 id="results-title">Privacy review</h2>
+                  <a className="repo-link" href={result.repo.url} target="_blank" rel="noreferrer">
+                    {result.repo.owner}/{result.repo.name}<span aria-hidden="true">↗</span>
+                  </a>
+                </div>
+                <div className="result-actions">
+                  <button type="button" className="button-secondary" onClick={exportJson}>Export JSON</button>
+                  <button type="button" className="button-secondary" onClick={() => window.print()}>Print report</button>
+                </div>
+              </div>
+
+              <div className="summary-grid">
+                <div className="summary-card">
+                  <span className="summary-label">Files reviewed</span>
+                  <strong>{result.summary.files_scanned}</strong>
+                  <small>{result.summary.files_skipped} skipped · {result.summary.files_unsupported} unsupported</small>
+                </div>
+                <div className="summary-card">
+                  <span className="summary-label">Privacy signals</span>
+                  <strong>{result.summary.total_findings}</strong>
+                  <small>Across {result.summary.jurisdictions.join(' + ')}</small>
+                </div>
+                <div className="summary-card generated-card">
+                  <span className="summary-label">Generated</span>
+                  <strong>{new Date(result.summary.generated_at).toLocaleString()}</strong>
+                  <small>Branch: {result.repo.default_branch}</small>
+                </div>
+              </div>
+              <div className="scan-metadata">
+                <div className="status-summary" aria-label="Finding status counts">
