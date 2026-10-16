@@ -127,3 +127,68 @@ def _safe_repo_path(path: str) -> bool:
         and not path.startswith("/")
         and normalized not in {".", ".."}
         and not normalized.startswith("../")
+        and "\\" not in path
+        and "\x00" not in path
+    )
+
+
+def _rule_counts(findings: list[dict[str, Any]]) -> dict[str, int]:
+    counts = {level: 0 for level in ("critical", "high", "medium", "low")}
+    for finding in findings:
+        severity = finding["severity"]
+        if severity in counts:
+            counts[severity] += 1
+    return counts
+
+
+def _semgrep_findings(
+    files: dict[str, str],
+    jurisdictions: list[str],
+    warnings: list[str],
+) -> list[dict[str, Any]]:
+    executable = shutil.which("semgrep")
+    if not executable:
+        warnings.append("Semgrep is not installed; built-in AST/tree-sitter checks completed without Semgrep rules.")
+        return []
+
+    config_path = Path(__file__).resolve().parent.parent / "rules" / "semgrep.yml"
+    findings: list[dict[str, Any]] = []
+    try:
+        with tempfile.TemporaryDirectory(prefix="privacy-lens-") as temp_dir:
+            root = Path(temp_dir)
+            for relative_path, source in files.items():
+                target = root.joinpath(*relative_path.split("/"))
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_text(source, encoding="utf-8")
+            command = [
+                executable,
+                "--config", str(config_path),
+                "--json",
+                "--no-git-ignore",
+                "--metrics=off",
+                str(root),
+            ]
+            result = subprocess.run(
+                command,
+                capture_output=True,
+                text=True,
+                timeout=MAX_SEMGREP_SECONDS,
+                check=False,
+                shell=False,
+            )
+            if result.returncode not in (0, 1):
+                warnings.append("Semgrep exited with an error; built-in analyzers' results were retained.")
+                return []
+            output = json.loads(result.stdout or "{}")
+            for match in output.get("results", []):
+                check_id = match.get("check_id", "")
+                line = int(match.get("start", {}).get("line", 1))
+                rule_id = (
+                    "SECURITY.SQL_INJECTION"
+                    if "sql-interpolation" in check_id
+                    else "SECURITY.HARDCODED_SECRET"
+                )
+                relative_path = Path(match.get("path", "")).relative_to(root).as_posix()
+                code = match.get("extra", {}).get("lines", "")
+                # A Semgrep result is retained only when the corresponding evidence line exists.
+                if not code:
