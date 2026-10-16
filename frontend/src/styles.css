@@ -503,3 +503,68 @@ input::placeholder {
   font-size: 0.7rem;
   line-height: 1.55;
 }
+
+.disclaimer > span {
+  color: #71cfc8;
+  font-size: 0.9rem;
+}
+
+.disclaimer p {
+  margin: 0;
+}
+
+.disclaimer strong {
+  color: #b7c9da;
+}
+
+.error-box,
+.warning-box {
+  margin-top: 1rem;
+  border-radius: 8px;
+  padding: 0.9rem 1rem;
+  font-size: 0.78rem;
+}
+
+.error-box {
+  border: 1px solid rgba(248, 113, 113, 0.35);
+  color: #fecaca;
+  background: rgba(127, 29, 29, 0.28);
+}
+
+.loading-state {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  margin-top: 1rem;
+  padding: 1rem;
+  border: 1px solid rgba(97, 223, 208, 0.22);
+  border-radius: 8px;
+  color: #b8d9dc;
+  background: rgba(27, 83, 91, 0.16);
+  font-size: 0.78rem;
+}
+
+.spinner {
+  display: inline-block;
+  flex: 0 0 auto;
+  width: 15px;
+  height: 15px;
+  border: 2px solid rgba(9, 42, 47, 0.28);
+  border-top-color: #092a2f;
+  border-radius: 50%;
+  animation: spin 700ms linear infinite;
+}
+
+.loading-state .spinner {
+  border-color: rgba(97, 223, 208, 0.22);
+  border-top-color: var(--cyan);
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.results {
+  margin-top: 3rem;
+}
+
