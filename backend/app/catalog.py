@@ -41,3 +41,62 @@ def build_finding(
 
     return {
         "rule_id": rule_id,
+        "title": rule["title"],
+        "category": rule["category"],
+        "severity": rule["severity"],
+        "confidence": round(confidence if confidence is not None else rule["confidence"], 2),
+        "status": status or rule["status"],
+        "file_path": file_path,
+        "line_start": line_start,
+        "line_end": line_end,
+        "evidence": evidence,
+        "reasoning": reasoning or rule["reasoning"],
+        "jurisdiction": jurisdiction,
+        "relevant_legal_reference": legal_reference,
+        "recommended_fix": recommended_fix or rule["recommended_fix"],
+        "false_positive_notes": false_positive_notes or rule["false_positive_notes"],
+        "evidence_kind": evidence_kind or "code",
+        "explanation": None,
+    }
+
+
+def legacy_finding(title: str, severity: str, category: str, evidence: list[str], jurisdiction: str, recommendation: str | None = None) -> dict[str, Any]:
+    category_id = {
+        "Personal data": "PRIVACY.PERSONAL_DATA_FIELD",
+        "Sensitive data": "PRIVACY.SENSITIVE_DATA_FIELD",
+        "Logging risk": "PRIVACY.SENSITIVE_LOGGING",
+        "Access control": "API.UNGUARDED_PERSONAL_ROUTE",
+        "Processing risk": "SECURITY.SQL_INJECTION",
+    }.get(category, "PRIVACY.PERSONAL_DATA_FIELD")
+    location, _, message = evidence[0].partition(" - ") if evidence else ("", "", title)
+    file_path, _, line_value = location.rpartition(":")
+    try:
+        line = max(1, int(line_value))
+    except ValueError:
+        file_path, line = "", 1
+    legacy = build_finding(
+        category_id,
+        file_path=file_path,
+        line_start=line,
+        line_end=line,
+        evidence=message or title,
+        jurisdiction=jurisdiction,
+        confidence=None,
+        status="requires_manual_review" if category_id.startswith("PRIVACY") else None,
+        recommended_fix=recommendation,
+        evidence_kind="legacy",
+    )
+    legal_basis = {
+        ("Personal data", "UK GDPR"): "UK GDPR Articles 5 and 25 (potential relevance; human review required)",
+        ("Sensitive data", "UK GDPR"): "UK GDPR Article 9 (potential relevance; human review required)",
+        ("Logging risk", "UK GDPR"): "UK GDPR Article 32 (potential relevance; human review required)",
+    }.get((category, jurisdiction), "Potentially relevant requirements require current human review.")
+    legacy.update(
+        title=title,
+        severity=severity,
+        category=category,
+        evidence=evidence,
+        legal_basis=legal_basis,
+        recommendation=recommendation or legacy["recommended_fix"],
+    )
+    return legacy
