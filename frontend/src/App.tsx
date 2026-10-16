@@ -237,3 +237,69 @@ function App() {
                   <path d="m22 35 7 7 14-15" />
                 </svg>
               </div>
+              <span className="art-label label-code">CODE</span>
+              <span className="art-label label-privacy">PRIVACY</span>
+            </div>
+          </section>
+
+          <form className="scan-panel" onSubmit={handleSubmit}>
+            <div className="panel-heading">
+              <div>
+                <span className="step-number">01</span>
+                <h2>Choose a repository</h2>
+              </div>
+              <span className="panel-meta">Public GitHub repositories</span>
+            </div>
+            <label className="field-label" htmlFor="repo-url">Repository URL</label>
+            <div className="url-input-wrap">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M10 13a5 5 0 0 0 7.07 0l3-3A5 5 0 0 0 13 2.93l-1.72 1.72" />
+                <path d="M14 11a5 5 0 0 0-7.07 0l-3 3A5 5 0 0 0 11 21.07l1.72-1.72" />
+              </svg>
+              <input
+                id="repo-url"
+                type="url"
+                value={repoUrl}
+                onChange={(event) => setRepoUrl(event.target.value)}
+                placeholder="https://github.com/owner/repository"
+                title="Enter a public GitHub repository URL."
+                required
+                disabled={loading}
+              />
+              <span className="input-hint">URL</span>
+            </div>
+            <p className="input-helper">Paste a public GitHub repository link, such as <code>github.com/owner/repository</code>.</p>
+            <button className="example-repo" type="button" onClick={() => setRepoUrl(EXAMPLE_REPOSITORY)} disabled={loading}>
+              Try an example <span aria-hidden="true">↗</span>
+            </button>
+            <div className="jurisdiction-select">
+              <div>
+                <span className="field-label">Regulatory lens</span>
+                <span className="field-help">Select at least one jurisdiction</span>
+              </div>
+              <div className="checkbox-row">
+                {JURISDICTIONS.map((jurisdiction) => (
+                  <label key={jurisdiction} className={`check-pill ${selectedJurisdictions.includes(jurisdiction) ? 'selected' : ''}`}>
+                    <input
+                      type="checkbox"
+                      checked={selectedJurisdictions.includes(jurisdiction)}
+                      onChange={() => toggleJurisdiction(jurisdiction)}
+                      disabled={loading}
+                    />
+                    <span className="check-indicator" aria-hidden="true">{selectedJurisdictions.includes(jurisdiction) ? '✓' : ''}</span>
+                    {jurisdiction}
+                  </label>
+                ))}
+              </div>
+            </div>
+            <div className="ai-option">
+              <label className="check-pill" htmlFor="include-explanations">
+                <input
+                  id="include-explanations"
+                  type="checkbox"
+                  checked={includeExplanations}
+                  onChange={(event) => setIncludeExplanations(event.target.checked)}
+                  disabled={loading}
+                />
+                <span className={`check-indicator ${includeExplanations ? 'checked' : ''}`} aria-hidden="true">
+                  {includeExplanations ? '✓' : ''}
