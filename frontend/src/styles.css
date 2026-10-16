@@ -1356,3 +1356,68 @@ input::placeholder { color: #91a29e; }
 
 @media (max-width: 480px) {
   .topbar { height: 64px; }
+  .topbar-note { display: none; }
+  .theme-toggle { min-height: 34px; padding: .4rem .55rem; }
+  .hero { padding-top: 2.15rem; }
+  h1 { font-size: clamp(2.2rem, 10vw, 2.8rem); }
+  .panel-heading h2 { font-size: .98rem; }
+  .ai-option { padding: .75rem; }
+  .form-footer { align-items: stretch; }
+  .results { margin-top: 2.4rem; }
+  .summary-grid { gap: .6rem; }
+  .summary-card { padding: .8rem; }
+  .summary-card strong { font-size: 1.45rem; }
+  .finding-card { padding: .95rem; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+}
+
+html[data-theme='dark'] {
+  color: #dce6f4;
+  background: #08121c;
+  --muted: #94a6b8;
+  --line: rgba(148, 173, 201, .16);
+  --panel: #101e2b;
+  --cyan: #69d6c8;
+  --blue: #79b3ee;
+}
+
+html[data-theme='dark'] body {
+  color: #dce6f4;
+  background:
+    radial-gradient(ellipse at 76% 4%, rgba(30, 96, 106, .2), transparent 35rem),
+    linear-gradient(180deg, #0b1722 0%, #09141e 60%, #0b1721 100%);
+}
+
+html[data-theme='dark'] .topbar { border-color: rgba(148, 173, 201, .13); }
+html[data-theme='dark'] .brand { color: #e8f1f8; }
+html[data-theme='dark'] .brand-mark { color: #052a2a; background: #69d6c8; }
+html[data-theme='dark'] .topbar-note { color: #93a6b7; }
+html[data-theme='dark'] .theme-toggle { border-color: #2a3d4b; color: #d2e1e8; background: #122331; }
+html[data-theme='dark'] .theme-toggle:hover { border-color: #497b79; background: #172c3a; }
+html[data-theme='dark'] .eyebrow { color: #83d1c7; }
+html[data-theme='dark'] h1 { color: #eff5f9; }
+html[data-theme='dark'] h1 span { color: #9bb5c6; }
+html[data-theme='dark'] .hero-description { color: #a4b4c1; }
+html[data-theme='dark'] .jurisdiction-tags span { border-color: rgba(105, 214, 200, .24); color: #b8ded8; background: rgba(29, 91, 88, .2); }
+html[data-theme='dark'] .art-orbit { border-color: rgba(103, 171, 197, .17); }
+html[data-theme='dark'] .art-shield { border-color: rgba(105, 214, 200, .48); background: linear-gradient(150deg, rgba(28, 84, 97, .62), rgba(17, 43, 63, .9)); box-shadow: 0 0 75px rgba(42, 168, 173, .16), inset 0 0 24px rgba(97, 223, 208, .08); }
+html[data-theme='dark'] .art-shield svg { stroke: #69d6c8; }
+html[data-theme='dark'] .art-label { border-color: rgba(130, 169, 198, .2); color: #a7bdcc; background: #0d1c29; }
+html[data-theme='dark'] .label-privacy { color: #81d6cc; }
+html[data-theme='dark'] .scan-panel { border-color: rgba(140, 169, 198, .19); background: linear-gradient(140deg, rgba(17, 35, 54, .98), rgba(12, 26, 43, .98)); box-shadow: 0 18px 55px rgba(0, 0, 0, .2); }
+html[data-theme='dark'] .step-number { color: #69d6c8; background: transparent; }
+html[data-theme='dark'] .panel-heading h2 { color: #e5edf7; }
+html[data-theme='dark'] .panel-meta, html[data-theme='dark'] .field-help { color: #879bad; }
+html[data-theme='dark'] .field-label { color: #c7d4e2; }
+html[data-theme='dark'] .url-input-wrap input, html[data-theme='dark'] .finding-filters input { border-color: rgba(145, 169, 195, .2); color: #e1edf8; background: rgba(4, 15, 28, .7); }
+html[data-theme='dark'] .url-input-wrap input:focus, html[data-theme='dark'] .finding-filters input:focus { border-color: rgba(105, 214, 200, .65); outline: 3px solid rgba(105, 214, 200, .12); }
+html[data-theme='dark'] .url-input-wrap > svg { stroke: #8da4b8; }
+html[data-theme='dark'] input::placeholder { color: #758ba0; }
+html[data-theme='dark'] .input-hint, html[data-theme='dark'] .input-helper { color: #8499ad; }
+html[data-theme='dark'] .input-helper code { color: #a6d6d0; }
+html[data-theme='dark'] .example-repo { color: #76d5ca; }
+html[data-theme='dark'] .check-pill { border-color: rgba(145, 169, 195, .2); color: #aab9c8; background: rgba(3, 14, 26, .45); }
+html[data-theme='dark'] .check-pill.selected { border-color: rgba(105, 214, 200, .42); color: #c9eeea; background: rgba(37, 114, 112, .18); }
