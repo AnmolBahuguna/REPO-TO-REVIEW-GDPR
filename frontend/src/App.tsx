@@ -434,3 +434,69 @@ function App() {
                     onChange={(event) => setQuery(event.target.value)}
                     placeholder="Search findings"
                   />
+                  {severityFilter !== 'all' || query ? (
+                    <button type="button" className="clear-filter" onClick={resetFindingFilters}>
+                      Clear filters
+                    </button>
+                  ) : null}
+                </div>
+              </div>
+
+              <div className="findings-list">
+                {filteredFindings.length === 0 ? (
+                  <div className="empty-state">
+                    <span aria-hidden="true">✓</span>
+                    <strong>{result.findings.length === 0 ? 'No privacy signals detected' : 'No matching findings'}</strong>
+                    <p>{result.findings.length === 0
+                      ? 'No configured rules matched the files reviewed. This is not a compliance certification.'
+                      : 'Try a different search or clear the severity filter.'}</p>
+                  </div>
+                ) : filteredFindings.map((finding, index) => (
+                  <article key={`${finding.title}-${finding.jurisdiction}-${index}`} className={`finding-card ${finding.severity}`}>
+                    <div className="finding-marker" aria-hidden="true" />
+                    <div className="finding-content">
+                      <div className="finding-topline">
+                        <span className={`badge ${finding.severity}`}>{finding.severity}</span>
+                        <span className="category">{finding.category}</span>
+                        <span className="jurisdiction">{finding.jurisdiction}</span>
+                        {finding.ml_triage ? (
+                          <span className="category">ML: {finding.ml_triage.label.replace(/_/g, ' ')} ({Math.round(finding.ml_triage.top_class_score * 100)}% model score)</span>
+                        ) : null}
+                      </div>
+                      <h4>{finding.title}</h4>
+                      <p className="finding-location">
+                        <a className="source-link" href={sourceUrl(finding)} target="_blank" rel="noreferrer" title="Open this location on GitHub">
+                          <code>{finding.file_path}:{finding.line_start}{finding.line_end !== finding.line_start ? `-${finding.line_end}` : ''}</code>
+                          <span aria-hidden="true">↗</span>
+                        </a>
+                        <span>{finding.rule_id}</span>
+                        <span>{Math.round(finding.confidence * 100)}% confidence</span>
+                        <span className={`status-tag ${finding.status}`}>{finding.status.replace(/_/g, ' ')}</span>
+                      </p>
+                      <p className="legal-basis">{finding.reasoning}</p>
+                      {finding.relevant_legal_reference ? (
+                        <p className="legal-reference">
+                          Potentially relevant: <a href={finding.relevant_legal_reference.url} target="_blank" rel="noreferrer">
+                            {finding.relevant_legal_reference.reference}
+                          </a>
+                        </p>
+                      ) : null}
+                      {finding.evidence ? (
+                        <details className="evidence-details">
+                          <summary>View redacted evidence</summary>
+                          <div className="evidence-box">
+                            <code>{finding.evidence}</code>
+                          </div>
+                        </details>
+                      ) : null}
+                      {finding.explanation ? <p className="ai-explanation"><strong>AI explanation</strong>{finding.explanation}</p> : null}
+                      <p className="recommendation"><strong>Recommended next step</strong>{finding.recommended_fix}</p>
+                      <p className="false-positive-notes"><strong>What may change this assessment:</strong> {finding.false_positive_notes}</p>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            </section>
+          ) : null}
+        </main>
+
