@@ -149,6 +149,72 @@ async def scan_repository(payload: ScanRequest):
     return result
 
 
+@app.post("/api/scan/stream")
+async def stream_scan_repository(payload: ScanRequest):
+    repo_url = (payload.repo_url or "").strip()
+    if not repo_url:
+        raise HTTPException(status_code=400, detail="A GitHub repository URL is required.")
+    if not payload.jurisdictions:
+        raise HTTPException(status_code=422, detail="Select at least one jurisdiction.")
+
+    events: Queue[dict[str, Any] | None] = Queue()
+
+    def run_scan() -> None:
+        try:
+            result = analyze_repository(
+                repo_url,
+                payload.jurisdictions,
+                progress_callback=events.put,
+            )
+            legal_counts = annotate_findings(result["findings"])
+            result["summary"]["legal_source_review"] = {
+                **legal_counts,
+                "source_documents": [source["document"] for source in source_status() if source["available"]],
+            }
+            if payload.include_explanations:
+                events.put({
+                    "type": "progress",
+                    "phase": "explanations",
+                    "message": "Adding optional AI explanations to the findings.",
+                })
+                result["summary"]["ai_explanations_requested"] = True
+                enriched, warning = asyncio.run(enrich_findings(result["findings"]))
+                result["summary"]["ai_findings_enriched"] = enriched
+                result["summary"]["ai_provider"] = "OpenRouter" if enriched else None
+                if warning:
+                    result["warnings"].append(warning)
+            events.put({"type": "complete", "result": result})
+        except ValueError as exc:
+            events.put({"type": "error", "detail": str(exc)})
+        except httpx.HTTPStatusError as exc:
+            detail = _github_http_error_detail(exc)
+            events.put({"type": "error", "detail": detail})
+        except httpx.HTTPError:
+            events.put({"type": "error", "detail": "GitHub API request failed; retry later or check repository access."})
+        except Exception:
+            events.put({"type": "error", "detail": "The scan stopped unexpectedly. Any findings already streamed are still available."})
+        finally:
+            events.put(None)
+
+    def event_stream():
+        Thread(target=run_scan, daemon=True).start()
+        while True:
+            try:
+                event = events.get(timeout=15)
+            except Empty:
+                yield '{"type":"keepalive"}\n'
+                continue
+            if event is None:
+                break
+            yield json.dumps(event, ensure_ascii=False, separators=(",", ":")) + "\n"
+
+    return StreamingResponse(
+        event_stream(),
+        media_type="application/x-ndjson",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
 if __name__ == "__main__":
     import uvicorn
 
