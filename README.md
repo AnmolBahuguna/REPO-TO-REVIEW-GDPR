@@ -12,6 +12,7 @@ It is a static-analysis aid, not a legal determination, audit, or compliance cer
 - Optional Semgrep integration and starter rules in `backend/rules/semgrep.yml`; built-in analysis continues if Semgrep is not installed.
 - Optional OpenRouter explanations and engineering recommendations for up to eight findings. This is off by default; when enabled, only redacted finding snippets and rule metadata are sent, never a repository or full file.
 - JSON export and browser print-to-PDF; interactive filtering by severity and search term.
+- Document-grounded UK legal Q&A and scan finding context from the UK GDPR, Data Protection Act 2018, and Data (Use and Access) Act 2025 CSVs. Findings include retrieved source excerpts and page references; this is retrieval, not model training or a legal determination.
 - Explicit counts and sample paths for unsupported files. Java, Go, Rust, C#, Ruby, PHP, Kotlin, Swift, and other files are **not analyzed** by the built-in parsers.
 - JSONL/CSV dataset loader/validator, group-safe train/validation/test pipeline, optional ML triage on rule findings, and standalone code triage inference command.
 
@@ -51,9 +52,11 @@ Optional API keys can be placed in `backend/.env` (copy `backend/.env.example`) 
 GITHUB_TOKEN=github-token-with-repository-read-access
 OPENROUTER_API_KEY=openrouter-api-key
 OPENROUTER_MODEL=openai/gpt-4o-mini
+OPENROUTER_FREE_MODEL=minimax/minimax-m3.1-flash:free
+LEGAL_ASSISTANT_USE_OPENROUTER=false
 ```
 
-`GITHUB_TOKEN` is optional for public repositories (it raises GitHub API rate limits) and is sent only to GitHub. It may allow access to repositories the token can read, so keep it in the backend `.env`; never put it in frontend code. `OPENROUTER_API_KEY` is optional and used only when AI explanations are enabled. The scanner validates GitHub URLs, uses fixed GitHub HTTPS hosts, disables redirects, caps files at 1 MB and scans at 250 files, and never executes repository code. GitHub's recursive tree endpoint may truncate very large repositories; that condition appears as a scan warning. The API also reports unparsed and unsupported files instead of claiming they were analyzed.
+`GITHUB_TOKEN` is optional for public repositories (it raises GitHub API rate limits) and is sent only to GitHub. It may allow access to repositories the token can read, so keep it in the backend `.env`; never put it in frontend code. The chatbot uses retrieved legal excerpts for data protection questions and OpenRouter for ordinary chat. Set `LEGAL_ASSISTANT_USE_OPENROUTER=true` to enable both generated legal answers and general chat. It tries `OPENROUTER_MODEL` first, then `OPENROUTER_FREE_MODEL` if the paid model returns HTTP 402 or 429. The free fallback may also be rate limited; legal answers then fall back to local excerpts, while general chat reports that OpenRouter is unavailable. `OPENROUTER_API_KEY` is also used when optional AI explanations are enabled. The scanner validates GitHub URLs, uses fixed GitHub HTTPS hosts, disables redirects, caps files at 1 MB and scans at 250 files, and downloads files concurrently (up to 24 at a time, with a 10-second per-file timeout). It never executes repository code. GitHub's recursive tree endpoint may truncate very large repositories; that condition appears as a scan warning. The API also reports unparsed and unsupported files instead of claiming they were analyzed.
 
 Optional Semgrep installation:
 
@@ -106,6 +109,15 @@ Train a model and report validation and held-out test metrics. Keep semantically
 ```powershell
 cd backend
 python scripts/train_model.py data/code_to_gdpr_seed_dataset.jsonl
+```
+
+The legal CSV files in the repository root are the RAG source corpus for chatbot answers and scan report legal context. Their provisions are not classification labels and are not used to train the code triage model. India DPDP is not covered by these sources, so the scanner does not attach Indian-law citations to those findings.
+
+The RAG corpus is generated from all three root law CSV files (`data.csv`, `data-_1_.csv`, and `data-_2_.csv`). The builder preserves page-break markers, splits each page into overlapping retrieval chunks, and creates a persistent hybrid word/character TF-IDF index. To rebuild the normalized corpus and index:
+
+```powershell
+cd backend
+python scripts/build_legal_index.py
 ```
 
 The trained artifact is written to `backend/artifacts/privacy_triage.joblib` (ignored by git). Classify a source file with it:
