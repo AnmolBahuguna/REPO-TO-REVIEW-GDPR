@@ -117,6 +117,109 @@ function isScanResponse(value: unknown): value is ScanResponse {
   );
 }
 
+function mergeFindings(current: Finding[], incoming: Finding[]) {
+  const merged = new Map<string, Finding>();
+  for (const finding of current) {
+    merged.set(`${finding.rule_id}:${finding.file_path}:${finding.line_start}:${finding.jurisdiction}`, finding);
+  }
+  for (const finding of incoming) {
+    merged.set(`${finding.rule_id}:${finding.file_path}:${finding.line_start}:${finding.jurisdiction}`, finding);
+  }
+  return [...merged.values()];
+}
+
+function downloadBlob(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = filename;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function csvCell(value: unknown) {
+  let text = typeof value === 'string' ? value : value == null ? '' : JSON.stringify(value) ?? '';
+  if (/^[\t\r ]*[=+\-@]/.test(text)) text = `'${text}`;
+  return `"${text.replace(/"/g, '""')}"`;
+}
+
+function pdfSafeText(value: unknown) {
+  return String(value ?? '')
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[\r\n\t]+/g, ' ')
+    .replace(/[^\x20-\x7E]/g, '?')
+    .trim();
+}
+
+function wrapPdfText(value: unknown, limit = 92) {
+  const words = pdfSafeText(value).split(/\s+/).filter(Boolean);
+  if (!words.length) return [''];
+  const wrapped: string[] = [];
+  let line = '';
+  for (const word of words) {
+    let remaining = word;
+    while (remaining.length > limit) {
+      if (line) {
+        wrapped.push(line);
+        line = '';
+      }
+      wrapped.push(remaining.slice(0, limit));
+      remaining = remaining.slice(limit);
+    }
+    if (!remaining) continue;
+    if (!line) line = remaining;
+    else if (line.length + remaining.length + 1 <= limit) line += ` ${remaining}`;
+    else {
+      wrapped.push(line);
+      line = remaining;
+    }
+  }
+  if (line) wrapped.push(line);
+  return wrapped;
+}
+
+function createPdfBlob(lines: string[]) {
+  const pageLines = Array.from({ length: Math.ceil(lines.length / 56) || 1 }, (_, index) => (
+    lines.slice(index * 56, (index + 1) * 56)
+  ));
+  const pageObjectIds = pageLines.map((_, index) => 4 + index * 2);
+  const objects = [
+    '<< /Type /Catalog /Pages 2 0 R >>',
+    `<< /Type /Pages /Kids [${pageObjectIds.map((id) => `${id} 0 R`).join(' ')}] /Count ${pageLines.length} >>`,
+    '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
+  ];
+
+  pageLines.forEach((page, index) => {
+    const pageId = pageObjectIds[index];
+    const contentId = pageId + 1;
+    const textCommands = page.map((line, lineIndex) => (
+      `${lineIndex ? 'T* ' : ''}(${line.replace(/[\\()]/g, (character) => `\\${character}`)}) Tj`
+    )).join('\n');
+    const stream = `BT\n/F1 9 Tf\n50 748 Td\n12 TL\n${textCommands}\nET`;
+    objects.push(
+      `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R >> >> /Contents ${contentId} 0 R >>`,
+      `<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`,
+    );
+  });
+
+  let documentText = '%PDF-1.4\n%Privacy Lens Report\n';
+  const offsets = [0];
+  objects.forEach((object, index) => {
+    offsets.push(documentText.length);
+    documentText += `${index + 1} 0 obj\n${object}\nendobj\n`;
+  });
+  const xrefOffset = documentText.length;
+  documentText += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
+  offsets.slice(1).forEach((offset) => {
+    documentText += `${String(offset).padStart(10, '0')} 00000 n \n`;
+  });
+  documentText += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF`;
+  return new Blob([documentText], { type: 'application/pdf' });
+}
+
 function App() {
   const [theme, setTheme] = useState<'light' | 'dark'>(() => (
     window.localStorage.getItem('privacy-lens-theme') === 'dark' ? 'dark' : 'light'
@@ -196,11 +299,16 @@ function App() {
     setLoading(true);
     setError('');
     setResult(null);
+    setLiveFindings([]);
+    setScanProgress({ phase: 'repository', message: 'Connecting to GitHub and loading the file list.' });
     setQuery('');
     setSeverityFilter('all');
 
+    const finalResult: { value: ScanResponse | null } = { value: null };
+    let streamedFindingCount = 0;
+
     try {
-      const response = await fetch(`${API_BASE_URL}/api/scan`, {
+      const response = await fetch(`${API_BASE_URL}/api/scan/stream`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -210,19 +318,83 @@ function App() {
         }),
       });
 
-      const data: unknown = await response.json().catch(() => null);
       if (!response.ok) {
+        const data: unknown = await response.json().catch(() => null);
         const detail = data && typeof data === 'object' && 'detail' in data && typeof data.detail === 'string'
           ? data.detail
           : `Scan failed with status ${response.status}.`;
         throw new Error(detail);
       }
-      if (!isScanResponse(data)) {
-        throw new Error('The scan service returned an invalid response.');
+      if (!response.body) {
+        throw new Error('The scan service did not return a readable progress stream.');
       }
-      setResult(data);
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let bufferedText = '';
+      const handleEventLine = (line: string) => {
+        if (!line.trim()) return;
+        const event = JSON.parse(line) as ScanStreamEvent;
+        if (event.type === 'keepalive') return;
+        if (event.type === 'progress') {
+          setScanProgress({
+            phase: event.phase ?? 'scan',
+            message: event.message ?? 'Scanning repository files.',
+            completed: event.completed,
+            total: event.total,
+            file_path: event.file_path,
+          });
+          return;
+        }
+        if (event.type === 'file_result' || event.type === 'finding_batch') {
+          const findings = event.findings ?? [];
+          if (findings.length) {
+            streamedFindingCount += findings.length;
+            setLiveFindings((current) => mergeFindings(current, findings));
+          }
+          if (event.type === 'file_result') {
+            setScanProgress({
+              phase: 'analyze',
+              message: `Analyzed ${event.completed ?? 0} of ${event.total ?? 0} files.`,
+              completed: event.completed,
+              total: event.total,
+              file_path: event.file_path,
+            });
+          }
+          return;
+        }
+        if (event.type === 'error') {
+          throw new Error(event.detail ?? 'The scan could not be completed.');
+        }
+        if (event.type === 'complete') {
+          if (!isScanResponse(event.result)) {
+            throw new Error('The scan service returned an invalid final result.');
+          }
+          finalResult.value = event.result;
+        }
+      };
+
+      while (true) {
+        const { done, value } = await reader.read();
+        bufferedText += decoder.decode(value, { stream: !done });
+        const lines = bufferedText.split(/\r?\n/);
+        bufferedText = lines.pop() ?? '';
+        lines.forEach(handleEventLine);
+        if (done) break;
+      }
+      if (bufferedText.trim()) handleEventLine(bufferedText);
+      if (!finalResult.value) {
+        throw new Error('The scan stream ended before a complete result arrived.');
+      }
+      setResult(finalResult.value);
+      setLiveFindings(finalResult.value.findings);
+      setScanProgress(null);
     } catch (scanError) {
-      setError(scanError instanceof Error ? scanError.message : 'Could not complete the scan.');
+      const message = scanError instanceof Error ? scanError.message : 'Could not complete the scan.';
+      setError(streamedFindingCount
+        ? `${message} Showing ${streamedFindingCount} findings received before the scan stopped.`
+        : message);
+      setScanProgress((current) => current ? { ...current, phase: 'stopped' } : null);
     } finally {
       setLoading(false);
     }
@@ -231,12 +403,101 @@ function App() {
   function exportJson() {
     if (!result) return;
     const blob = new Blob([JSON.stringify(result, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement('a');
-    anchor.href = url;
-    anchor.download = `${result.repo.owner}-${result.repo.name}-privacy-report.json`;
-    anchor.click();
-    URL.revokeObjectURL(url);
+    downloadBlob(blob, `${result.repo.owner}-${result.repo.name}-privacy-report.json`);
+  }
+
+  function exportCsv() {
+    if (!result) return;
+    const repository = `${result.repo.owner}/${result.repo.name}`;
+    const shared = {
+      repository,
+      branch: result.repo.default_branch,
+      generated_at: result.summary.generated_at,
+      summary: JSON.stringify(result.summary),
+      warnings: result.warnings.join(' | '),
+    };
+    const columns = [
+      'record_type', 'repository', 'branch', 'generated_at', 'summary', 'warnings',
+      'rule_id', 'title', 'severity', 'category', 'jurisdiction', 'confidence', 'status',
+      'file_path', 'line_start', 'line_end', 'evidence', 'reasoning', 'recommended_fix',
+      'false_positive_notes', 'relevant_legal_reference', 'evidence_kind', 'explanation', 'ml_triage',
+    ];
+    const rows: Record<string, unknown>[] = [
+      { record_type: 'summary', ...shared },
+      ...result.findings.map((finding) => ({
+        record_type: 'finding',
+        ...shared,
+        ...finding,
+        relevant_legal_reference: finding.relevant_legal_reference,
+        ml_triage: finding.ml_triage ?? null,
+      })),
+    ];
+    const csv = [
+      columns.map(csvCell).join(','),
+      ...rows.map((row) => columns.map((column) => csvCell(row[column])).join(',')),
+    ].join('\r\n');
+    downloadBlob(
+      new Blob(['\uFEFF', csv], { type: 'text/csv;charset=utf-8' }),
+      `${result.repo.owner}-${result.repo.name}-privacy-report.csv`,
+    );
+  }
+
+  function exportPdf() {
+    if (!result) return;
+    const lines: string[] = [];
+    const add = (value = '') => lines.push(...wrapPdfText(value));
+    const repository = `${result.repo.owner}/${result.repo.name}`;
+
+    add('PRIVACY LENS - SCAN REPORT');
+    add(`Repository: ${repository}`);
+    add(`URL: ${result.repo.url}`);
+    add(`Branch: ${result.repo.default_branch}`);
+    add(`Generated: ${new Date(result.summary.generated_at).toLocaleString()}`);
+    add(`Files scanned: ${result.summary.files_scanned} | Skipped: ${result.summary.files_skipped} | Unsupported: ${result.summary.files_unsupported} | Parse failed: ${result.summary.files_parse_failed}`);
+    add(`Total findings: ${result.summary.total_findings}`);
+    add(`Jurisdictions: ${result.summary.jurisdictions.join(', ')}`);
+    add(`Severity counts: ${JSON.stringify(result.summary.severity_counts)}`);
+    add(`Status counts: ${JSON.stringify(result.summary.status_counts)}`);
+    add(`Legal assessment: potential source context for ${result.summary.legal_source_review?.annotated ?? 0} findings. These are review prompts, not confirmed legal violations.`);
+    if (result.summary.legal_source_review?.source_documents.length) add(`Legal source documents: ${result.summary.legal_source_review.source_documents.join('; ')}`);
+    add('');
+    add('FINDINGS');
+    add('');
+
+    if (!result.findings.length) add('No findings were returned by the scan.');
+    result.findings.forEach((finding, index) => {
+      add(`${index + 1}. [${finding.severity.toUpperCase()}] ${finding.title}`);
+      add(`Rule: ${finding.rule_id} | Jurisdiction: ${finding.jurisdiction} | Status: ${finding.status} | Confidence: ${Math.round(finding.confidence * 100)}%`);
+      add(`File: ${finding.file_path}:${finding.line_start}-${finding.line_end}`);
+      add(`Evidence: ${finding.evidence}`);
+      add(`Reasoning: ${finding.reasoning}`);
+      add(`Recommended fix: ${finding.recommended_fix}`);
+      add(`False-positive notes: ${finding.false_positive_notes}`);
+      if (finding.legal_context) {
+        add(`Legal review note: ${finding.legal_context.message}`);
+        finding.legal_context.sources.forEach((source) => {
+          add(`Potentially relevant source: ${source.document}, ${source.reference}`);
+          add(`Source excerpt: ${source.excerpt}`);
+        });
+      }
+      if (finding.relevant_legal_reference) {
+        add(`Legal reference: ${finding.relevant_legal_reference.reference} (${finding.relevant_legal_reference.url})`);
+      }
+      if (finding.explanation) add(`Explanation: ${finding.explanation}`);
+      if (finding.ml_triage) {
+        add(`ML triage: ${finding.ml_triage.label} (${Math.round(finding.ml_triage.top_class_score * 100)}%)`);
+      }
+      add('');
+    });
+
+    if (result.warnings.length) {
+      add('SCAN WARNINGS');
+      result.warnings.forEach((warning) => add(`- ${warning}`));
+    }
+    downloadBlob(
+      createPdfBlob(lines),
+      `${result.repo.owner}-${result.repo.name}-privacy-report.pdf`,
+    );
   }
 
   function resetFindingFilters() {
@@ -412,8 +673,46 @@ function App() {
           {loading ? (
             <div className="loading-state" role="status" aria-live="polite">
               <span className="spinner" aria-hidden="true" />
-              <span>Reviewing repository files. Larger projects may take a little longer.</span>
+              <span>{scanProgress?.message ?? 'Reviewing repository files.'}</span>
             </div>
+          ) : null}
+
+          {(loading || (scanProgress !== null && !result)) ? (
+            <section className="live-scan-panel" aria-live="polite">
+              <div className="live-scan-heading">
+                <strong>{loading ? 'Live scan output' : 'Partial scan output'}</strong>
+                <span>{liveFindings.length} finding{liveFindings.length === 1 ? '' : 's'} so far</span>
+              </div>
+              {scanProgress ? (
+                <p className="live-scan-status">
+                  {scanProgress.message}
+                  {scanProgress.total !== undefined ? ` (${scanProgress.completed ?? 0}/${scanProgress.total})` : ''}
+                </p>
+              ) : null}
+              {scanProgress?.file_path ? (
+                <code className="live-scan-file">{scanProgress.file_path}</code>
+              ) : null}
+              {liveFindings.length ? (
+                <ul className="live-findings-list">
+                  {liveFindings.slice(0, 8).map((finding) => (
+                    <li key={`${finding.rule_id}:${finding.file_path}:${finding.line_start}:${finding.jurisdiction}`}>
+                      <span className={`badge ${finding.severity}`}>{finding.severity}</span>
+                      <span className="live-finding-details">
+                        <strong>{finding.title}</strong>
+                        <code>{finding.file_path}:{finding.line_start}</code>
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="live-scan-empty">
+                  {loading ? 'No findings yet. Files are still being checked.' : 'No findings arrived before the scan stopped.'}
+                </p>
+              )}
+              {liveFindings.length > 8 ? (
+                <p className="live-scan-more">Showing the first 8 findings as they arrive.</p>
+              ) : null}
+            </section>
           ) : null}
 
           {result ? (
@@ -428,7 +727,8 @@ function App() {
                 </div>
                 <div className="result-actions">
                   <button type="button" className="button-secondary" onClick={exportJson}>Export JSON</button>
-                  <button type="button" className="button-secondary" onClick={() => window.print()}>Print report</button>
+                  <button type="button" className="button-secondary" onClick={exportCsv}>Export CSV</button>
+                  <button type="button" className="button-secondary" onClick={exportPdf}>Download PDF</button>
                 </div>
               </div>
 
@@ -453,6 +753,7 @@ function App() {
                 <div className="status-summary" aria-label="Finding status counts">
                   <span>{result.summary.status_counts.potential_issue} potential issue</span>
                   <span>{result.summary.status_counts.requires_manual_review} manual review</span>
+                  <span>{result.summary.legal_source_review?.annotated ?? 0} findings with UK legal source context</span>
                   <span>Rule catalog {Object.values(result.summary.compliance_mapping_versions)[0] ?? 'unknown'}</span>
                   <span>{result.summary.semgrep_available ? 'Semgrep enabled' : 'Semgrep unavailable'}</span>
                   {result.summary.ai_explanations_requested ? (
