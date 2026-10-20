@@ -6,12 +6,15 @@ import posixpath
 import re
 import shutil
 import subprocess
+import sys
 import tempfile
 import time
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from queue import Empty, Queue
+from threading import Thread
+from typing import Any, Callable
 from urllib.parse import quote, urlparse
 
 import httpx
@@ -34,9 +37,135 @@ SOURCE_EXTENSIONS = {
 MAX_SUPPORTED_FILES = 250
 MAX_FILE_SIZE_BYTES = 1_000_000
 MAX_WARNINGS = 20
-MAX_CONCURRENT_DOWNLOADS = 8
-MAX_SCAN_SECONDS = 180
+MAX_CONCURRENT_DOWNLOADS = 24
+FILE_DOWNLOAD_TIMEOUT_SECONDS = 10
+FILE_ANALYSIS_TIMEOUT_SECONDS = 12
+MAX_SCAN_SECONDS = 120
 MAX_SEMGREP_SECONDS = 25
+TREE_SITTER_METHODS = {
+    ".js": "tree-sitter-javascript",
+    ".jsx": "tree-sitter-javascript",
+    ".mjs": "tree-sitter-javascript",
+    ".cjs": "tree-sitter-javascript",
+    ".ts": "tree-sitter-typescript",
+    ".mts": "tree-sitter-typescript",
+    ".cts": "tree-sitter-typescript",
+    ".tsx": "tree-sitter-tsx",
+    ".sql": "tree-sitter-sql",
+}
+TREE_SITTER_WORKER_SOURCE = """
+import json
+import sys
+from app.analyzers import analyze_source_file
+
+for line in sys.stdin:
+    try:
+        request = json.loads(line)
+        findings, method, status = analyze_source_file(
+            request["file_path"], request["source"], request["jurisdictions"]
+        )
+        response = {"findings": findings, "method": method, "status": status}
+    except Exception:
+        response = {"error": True}
+    sys.stdout.write(json.dumps(response, ensure_ascii=False, separators=(",", ":")) + "\\n")
+    sys.stdout.flush()
+"""
+
+
+class IsolatedTreeSitterAnalyzer:
+    """Keep native parser crashes and hangs inside a restartable child process."""
+
+    def __init__(self) -> None:
+        self.process: subprocess.Popen[str] | None = None
+        self.responses: Queue[str | None] = Queue()
+
+    def __enter__(self) -> "IsolatedTreeSitterAnalyzer":
+        return self
+
+    def __exit__(self, exc_type: Any, exc_value: Any, traceback: Any) -> None:
+        self.close()
+
+    def _read_responses(self, stream: Any, responses: Queue[str | None]) -> None:
+        try:
+            for line in stream:
+                responses.put(line)
+        finally:
+            responses.put(None)
+
+    def _start(self) -> None:
+        self.responses = Queue()
+        self.process = subprocess.Popen(
+            [sys.executable, "-c", TREE_SITTER_WORKER_SOURCE],
+            cwd=Path(__file__).resolve().parents[1],
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            text=True,
+            encoding="utf-8",
+            bufsize=1,
+        )
+        Thread(
+            target=self._read_responses,
+            args=(self.process.stdout, self.responses),
+            daemon=True,
+        ).start()
+
+    def _stop(self, terminate: bool = False) -> None:
+        process = self.process
+        self.process = None
+        if process is None:
+            return
+        if process.stdin is not None:
+            try:
+                process.stdin.close()
+            except OSError:
+                pass
+        if terminate and process.poll() is None:
+            process.terminate()
+        try:
+            process.wait(timeout=1)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            process.wait(timeout=1)
+        if process.stdout is not None:
+            process.stdout.close()
+
+    def analyze(
+        self,
+        file_path: str,
+        source: str,
+        jurisdictions: list[str],
+    ) -> tuple[list[dict[str, Any]], str, str]:
+        method = TREE_SITTER_METHODS.get(Path(file_path).suffix.lower())
+        if method is None:
+            return analyze_source_file(file_path, source, jurisdictions)
+
+        try:
+            if self.process is None or self.process.poll() is not None:
+                self._stop()
+                self._start()
+            assert self.process is not None and self.process.stdin is not None
+            request = json.dumps({
+                "file_path": file_path,
+                "source": source,
+                "jurisdictions": jurisdictions,
+            }, ensure_ascii=False, separators=(",", ":"))
+            self.process.stdin.write(request + "\n")
+            self.process.stdin.flush()
+            response_line = self.responses.get(timeout=FILE_ANALYSIS_TIMEOUT_SECONDS)
+            if response_line is None:
+                self._stop(terminate=True)
+                return [], method, "parse_error"
+            response = json.loads(response_line)
+            if response.get("error") or not isinstance(response.get("findings"), list):
+                return [], method, "parse_error"
+            return response["findings"], response.get("method", method), response.get("status", "parse_error")
+        except Exception:
+            self._stop(terminate=True)
+            return [], method, "parse_error"
+
+    def close(self) -> None:
+        self._stop()
 
 
 def extract_repo_details(repo_url: str) -> tuple[str, str]:
@@ -113,7 +242,11 @@ def fetch_json(client: httpx.Client, url: str) -> dict[str, Any]:
 
 
 def fetch_text(client: httpx.Client, url: str) -> str:
-    response = client.get(url, headers={"Accept": "text/plain"})
+    response = client.get(
+        url,
+        headers={"Accept": "text/plain"},
+        timeout=FILE_DOWNLOAD_TIMEOUT_SECONDS,
+    )
     response.raise_for_status()
     if len(response.content) > MAX_FILE_SIZE_BYTES:
         raise ValueError("Downloaded file exceeds the configured file-size limit.")
@@ -218,11 +351,20 @@ def _semgrep_findings(
     return findings
 
 
-def analyze_repository(repo_url: str, jurisdictions: list[str] | None = None) -> dict[str, Any]:
+def analyze_repository(
+    repo_url: str,
+    jurisdictions: list[str] | None = None,
+    progress_callback: Callable[[dict[str, Any]], None] | None = None,
+) -> dict[str, Any]:
+    def report_progress(**event: Any) -> None:
+        if progress_callback is not None:
+            progress_callback({"type": "progress", **event})
+
     owner, repo_name = extract_repo_details(repo_url)
     selected_jurisdictions = normalize_jurisdictions(jurisdictions)
     api_repo = f"https://api.github.com/repos/{quote(owner, safe='')}/{quote(repo_name, safe='')}"
     deadline = time.monotonic() + MAX_SCAN_SECONDS
+    report_progress(phase="repository", message="Loading the repository file list.")
 
     # Fixed HTTPS origins, validated repository components, and disabled redirects
     # prevent user-controlled URLs from reaching arbitrary network destinations.
@@ -287,6 +429,14 @@ def analyze_repository(repo_url: str, jurisdictions: list[str] | None = None) ->
         if unsupported:
             add_warning(f"{unsupported} files with unsupported extensions were not analyzed; see unsupported_file_samples.")
 
+        download_total = len(supported_files)
+        report_progress(
+            phase="download",
+            message=f"Fetching {download_total} supported files from GitHub.",
+            completed=0,
+            total=download_total,
+        )
+
         def fetch_candidate(item: dict[str, Any]) -> tuple[str, str | None]:
             if time.monotonic() >= deadline:
                 return item["path"], None
@@ -301,32 +451,76 @@ def analyze_repository(repo_url: str, jurisdictions: list[str] | None = None) ->
                 return path, None
 
         fetched_sources: dict[str, str] = {}
-        with ThreadPoolExecutor(max_workers=MAX_CONCURRENT_DOWNLOADS) as executor:
-            for path, content in executor.map(fetch_candidate, supported_files):
+        findings: list[dict[str, Any]] = []
+        analysis_methods: dict[str, int] = {}
+        parse_errors: list[str] = []
+        analyzed_count = 0
+        with IsolatedTreeSitterAnalyzer() as isolated_analyzer, ThreadPoolExecutor(max_workers=MAX_CONCURRENT_DOWNLOADS) as executor:
+            future_paths = {
+                executor.submit(fetch_candidate, item): item["path"]
+                for item in supported_files
+            }
+            for completed, future in enumerate(as_completed(future_paths), start=1):
+                path, content = future.result()
                 if content is None:
                     skipped += 1
                     add_warning(f"Skipped unreadable or oversized file: {path}")
+                else:
+                    fetched_sources[path] = content
+                report_progress(
+                    phase="download",
+                    message=f"Fetched {completed} of {download_total} files.",
+                    completed=completed,
+                    total=download_total,
+                    file_path=path,
+                )
+                if content is None:
                     continue
-                fetched_sources[path] = content
 
-    findings: list[dict[str, Any]] = []
-    analysis_methods: dict[str, int] = {}
-    parse_errors: list[str] = []
-    for path, source in fetched_sources.items():
-        method = "unsupported"
-        status = "unsupported"
-        file_findings: list[dict[str, Any]] = []
-        try:
-            file_findings, method, status = analyze_source_file(path, source, selected_jurisdictions)
-        except (ValueError, TypeError, UnicodeError):
-            status = "parse_error"
-        analysis_methods[method] = analysis_methods.get(method, 0) + 1
-        if status == "parse_error":
-            parse_errors.append(path)
-            continue
-        findings.extend(file_findings)
+                analyzed_count += 1
+                report_progress(
+                    phase="analyze",
+                    message=f"Analyzing {analyzed_count} of {download_total} selected files.",
+                    completed=analyzed_count - 1,
+                    total=download_total,
+                    file_path=path,
+                )
+                method = "unsupported"
+                status = "unsupported"
+                file_findings: list[dict[str, Any]] = []
+                try:
+                    file_findings, method, status = isolated_analyzer.analyze(path, content, selected_jurisdictions)
+                except Exception:
+                    status = "parse_error"
+                analysis_methods[method] = analysis_methods.get(method, 0) + 1
+                if status == "parse_error":
+                    parse_errors.append(path)
+                else:
+                    findings.extend(file_findings)
+                if progress_callback is not None:
+                    progress_callback({
+                        "type": "file_result",
+                        "phase": "analyze",
+                        "completed": analyzed_count,
+                        "total": download_total,
+                        "file_path": path,
+                        "analysis_method": method,
+                        "status": status,
+                        "findings": file_findings if status != "parse_error" else [],
+                    })
 
-    findings.extend(_semgrep_findings(fetched_sources, selected_jurisdictions, warnings))
+    report_progress(
+        phase="analyze",
+        message=f"Analyzed {analyzed_count} downloaded files.",
+        completed=analyzed_count,
+        total=download_total,
+    )
+
+    report_progress(phase="supplemental", message="Running optional supplemental checks.")
+    supplemental_findings = _semgrep_findings(fetched_sources, selected_jurisdictions, warnings)
+    findings.extend(supplemental_findings)
+    if supplemental_findings and progress_callback is not None:
+        progress_callback({"type": "finding_batch", "findings": supplemental_findings})
     if parse_errors:
         add_warning(f"{len(parse_errors)} supported files could not be parsed and were not analyzed.")
 
@@ -354,7 +548,7 @@ def analyze_repository(repo_url: str, jurisdictions: list[str] | None = None) ->
         lines = source.splitlines()
         evidence = redact_evidence(lines[line - 1] if line <= len(lines) else "")
         for jurisdiction in selected_jurisdictions:
-            findings.append({
+            lifecycle_finding = {
                 "rule_id": "PRIVACY.ACCOUNT_LIFECYCLE",
                 "title": "Review account data export and deletion workflows",
                 "category": "privacy_control_gap",
@@ -372,7 +566,10 @@ def analyze_repository(repo_url: str, jurisdictions: list[str] | None = None) ->
                 "false_positive_notes": "The workflow may be implemented in another service, repository, or operational process.",
                 "evidence_kind": "repository_context",
                 "explanation": None,
-            })
+            }
+            findings.append(lifecycle_finding)
+            if progress_callback is not None:
+                progress_callback({"type": "finding_batch", "findings": [lifecycle_finding]})
 
     unique_findings: list[dict[str, Any]] = []
     seen_findings: set[tuple[str, str, int, str]] = set()
@@ -397,6 +594,7 @@ def analyze_repository(repo_url: str, jurisdictions: list[str] | None = None) ->
         "findings_classified": 0,
         "label_counts": {label: 0 for label in ("positive", "negative", "requires_context")},
     }
+    report_progress(phase="triage", message="Applying optional local ML triage.")
     try:
         model_path = Path(__file__).resolve().parents[1] / "artifacts" / "privacy_triage.joblib"
         bundle = load_model(model_path)
