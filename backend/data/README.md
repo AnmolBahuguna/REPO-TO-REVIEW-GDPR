@@ -1,5 +1,7 @@
 # Optional labeled seed dataset
 
+`legal_law_corpus.csv` is built from the root CSVs `data.csv`, `data-_1_.csv`, and `data-_2_.csv`. It contains page text and citation metadata for the supplied UK GDPR, Data Protection Act 2018, and Data (Use and Access) Act 2025. The RAG pipeline chunks these pages and indexes them for legal passage retrieval in chatbot answers and scan reports. This is an unlabelled legal corpus, not a supervised training dataset for `train_model.py`.
+
 Place user-provided seed files in this directory:
 
 - `code_to_gdpr_seed_dataset.jsonl`
