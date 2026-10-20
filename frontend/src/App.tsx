@@ -22,6 +22,11 @@ type Finding = {
   evidence_kind: string;
   explanation: string | null;
   ml_triage?: { label: string; top_class_score: number; model_version: string };
+  legal_context?: {
+    status: string;
+    message: string;
+    sources: { document: string; page: number; reference: string; excerpt: string }[];
+  };
 };
 
 type ScanResponse = {
@@ -44,6 +49,7 @@ type ScanResponse = {
     jurisdictions: string[];
     compliance_mapping_versions: Record<string, string>;
     compliance_notices: Record<string, string>;
+    legal_source_review?: { annotated: number; without_relevant_source: number; unsupported_jurisdiction: number; source_documents: string[] };
     semgrep_available: boolean;
     ai_explanations_requested?: boolean;
     ai_findings_enriched?: number;
@@ -58,6 +64,33 @@ type ScanResponse = {
   };
   findings: Finding[];
   warnings: string[];
+};
+
+type ScanStreamEvent = {
+  type: 'progress' | 'file_result' | 'finding_batch' | 'complete' | 'error' | 'keepalive';
+  phase?: string;
+  completed?: number;
+  total?: number;
+  file_path?: string;
+  message?: string;
+  findings?: Finding[];
+  result?: ScanResponse;
+  detail?: string;
+};
+
+type ScanProgress = {
+  phase: string;
+  message: string;
+  completed?: number;
+  total?: number;
+  file_path?: string;
+};
+
+type LegalResponse = {
+  answer: string;
+  grounded: boolean;
+  citations: { document: string; page: number; reference: string }[];
+  passages?: { document: string; page: number; reference: string; text: string }[];
 };
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? '';
@@ -92,10 +125,16 @@ function App() {
   const [selectedJurisdictions, setSelectedJurisdictions] = useState<JurisdictionOption[]>(JURISDICTIONS);
   const [result, setResult] = useState<ScanResponse | null>(null);
   const [loading, setLoading] = useState(false);
+  const [scanProgress, setScanProgress] = useState<ScanProgress | null>(null);
+  const [liveFindings, setLiveFindings] = useState<Finding[]>([]);
   const [error, setError] = useState('');
   const [query, setQuery] = useState('');
   const [severityFilter, setSeverityFilter] = useState<Severity | 'all'>('all');
   const [includeExplanations, setIncludeExplanations] = useState(false);
+  const [legalQuestion, setLegalQuestion] = useState('');
+  const [legalResponse, setLegalResponse] = useState<LegalResponse | null>(null);
+  const [legalLoading, setLegalLoading] = useState(false);
+  const [legalError, setLegalError] = useState('');
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
@@ -107,6 +146,27 @@ function App() {
       current.includes(value) ? current.filter((item) => item !== value) : [...current, value]
     ));
   };
+
+  async function askLegalQuestion(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setLegalLoading(true);
+    setLegalError('');
+    setLegalResponse(null);
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/legal/ask`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ question: legalQuestion.trim() }),
+      });
+      const data = await response.json().catch(() => null);
+      if (!response.ok) throw new Error(data?.detail ?? `Question failed with status ${response.status}.`);
+      setLegalResponse(data as LegalResponse);
+    } catch (caught) {
+      setLegalError(caught instanceof Error ? caught.message : 'The legal assistant could not answer right now.');
+    } finally {
+      setLegalLoading(false);
+    }
+  }
 
   const filteredFindings = useMemo(() => {
     if (!result) return [];
@@ -242,6 +302,29 @@ function App() {
             </div>
           </section>
 
+          <section className="legal-chat" aria-labelledby="legal-chat-title">
+            <div>
+              <p className="eyebrow">LEGAL Q&amp;A AND GENERAL CHAT</p>
+              <h2 id="legal-chat-title">Ask about the supplied laws or anything else</h2>
+              <p>Legal answers use retrieved passages from the UK GDPR, Data Protection Act 2018, and Data (Use and Access) Act 2025. Other questions are answered by the OpenRouter chatbot.</p>
+            </div>
+            <form onSubmit={askLegalQuestion} className="legal-chat-form">
+              <label className="sr-only" htmlFor="legal-question">Your question</label>
+              <textarea id="legal-question" value={legalQuestion} onChange={(event) => setLegalQuestion(event.target.value)} maxLength={2000} required minLength={3} placeholder="Ask about data protection law or anything else…" />
+              <button type="submit" disabled={legalLoading || legalQuestion.trim().length < 3}>{legalLoading ? 'Searching the laws…' : 'Ask from these laws'}</button>
+            </form>
+            {legalError ? <div className="error-box" role="alert">{legalError}</div> : null}
+            {legalResponse ? (
+              <div className="legal-answer" aria-live="polite">
+                <h3>Answer</h3>
+                <p>{legalResponse.answer}</p>
+                {legalResponse.citations.length ? <p className="legal-citations"><strong>Sources:</strong> {legalResponse.citations.map((citation) => `${citation.document}, ${citation.reference}`).join(' · ')}</p> : null}
+                {legalResponse.passages?.map((passage) => <details key={`${passage.document}-${passage.page}`}><summary>{passage.document} · {passage.reference}</summary><p>{passage.text}</p></details>)}
+                <small>Informational only. This does not determine compliance, and the supplied PDFs may not include later legal changes.</small>
+              </div>
+            ) : null}
+          </section>
+
           <form className="scan-panel" onSubmit={handleSubmit}>
             <div className="panel-heading">
               <div>
@@ -304,9 +387,9 @@ function App() {
                 <span className={`check-indicator ${includeExplanations ? 'checked' : ''}`} aria-hidden="true">
                   {includeExplanations ? '✓' : ''}
                 </span>
-                Optional AI explanations and recommendations
+                Optional AI explanations and law-aware fix suggestions
               </label>
-                <p>When enabled, up to 8 redacted finding excerpts are sent to OpenRouter for explanations and engineering recommendations. Repository source code is never sent in bulk.</p>
+                <p>When enabled, up to 8 redacted finding excerpts and their retrieved legal passages are sent to OpenRouter for explanations and engineering suggestions. Repository source code is never sent in bulk.</p>
             </div>
             <div className="form-footer">
               <p><span className="info-icon" aria-hidden="true">i</span> Analysis uses public source files only.</p>
@@ -474,6 +557,18 @@ function App() {
                         <span className={`status-tag ${finding.status}`}>{finding.status.replace(/_/g, ' ')}</span>
                       </p>
                       <p className="legal-basis">{finding.reasoning}</p>
+                      {finding.legal_context ? (
+                        <details className="legal-context-details">
+                          <summary>Legal source context · {finding.legal_context.sources.length} passage{finding.legal_context.sources.length === 1 ? '' : 's'}</summary>
+                          <p>{finding.legal_context.message}</p>
+                          {finding.legal_context.sources.map((source) => (
+                            <div className="legal-source" key={`${source.document}-${source.page}`}>
+                              <strong>{source.document} · {source.reference}</strong>
+                              <p>{source.excerpt}</p>
+                            </div>
+                          ))}
+                        </details>
+                      ) : null}
                       {finding.relevant_legal_reference ? (
                         <p className="legal-reference">
                           Potentially relevant: <a href={finding.relevant_legal_reference.url} target="_blank" rel="noreferrer">
