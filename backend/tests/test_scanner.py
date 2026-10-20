@@ -2,6 +2,7 @@ import asyncio
 import json
 import os
 import tempfile
+import threading
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -362,6 +363,39 @@ class RepositoryScanTests(unittest.TestCase):
         self.assertEqual(result["summary"]["jurisdictions"], ["UK GDPR"])
         self.assertTrue(all(finding["jurisdiction"] == "UK GDPR" or finding["jurisdiction"] == "General security review" for finding in result["findings"]))
         self.assertEqual(result["summary"]["total_findings"], len(result["findings"]))
+
+    def test_repository_downloads_files_concurrently(self):
+        repository = {"default_branch": "main", "html_url": "https://github.com/example/project"}
+        files = [
+            {"type": "blob", "path": f"src/file_{index}.py", "size": 10}
+            for index in range(12)
+        ]
+        active_downloads = 0
+        peak_downloads = 0
+        lock = threading.Lock()
+        enough_workers = threading.Event()
+
+        def fetch_text(_client, _url):
+            nonlocal active_downloads, peak_downloads
+            with lock:
+                active_downloads += 1
+                peak_downloads = max(peak_downloads, active_downloads)
+                if active_downloads >= len(files):
+                    enough_workers.set()
+            enough_workers.wait(timeout=1)
+            with lock:
+                active_downloads -= 1
+            return "email_address = request.json['email']"
+
+        with (
+            patch("app.scanner.fetch_json", side_effect=[repository, {"tree": files}]),
+            patch("app.scanner.fetch_text", side_effect=fetch_text),
+            patch("app.scanner.shutil.which", return_value=None),
+        ):
+            result = analyze_repository("https://github.com/example/project", ["UK GDPR"])
+
+        self.assertEqual(result["summary"]["files_scanned"], len(files))
+        self.assertEqual(peak_downloads, len(files))
 
 
 if __name__ == "__main__":
