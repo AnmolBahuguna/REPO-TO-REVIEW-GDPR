@@ -66,7 +66,7 @@ pip install semgrep
 
 Semgrep runs against temporary copies of selected source files, with a time limit; temporary files are cleaned when the scan finishes. It is not required for the built-in AST/tree-sitter engine.
 
-The backend endpoints are `/health`, `/api/rules`, and `POST /api/scan`. Interactive docs: `http://localhost:8000/docs`. Set `include_explanations: true` in a scan request to explicitly opt in to OpenRouter enrichment.
+The backend endpoints are `/health`, `/api/rules`, `POST /api/scan`, and `POST /api/scan/stream`. The stream endpoint returns newline-delimited progress and per-file findings while a scan is running; the frontend uses it to show results before the scan completes. Interactive docs: `http://localhost:8000/docs`. Set `include_explanations: true` in a scan request to explicitly opt in to OpenRouter enrichment.
 
 ### Frontend
 
