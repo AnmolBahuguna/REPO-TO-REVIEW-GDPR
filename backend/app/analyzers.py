@@ -535,17 +535,41 @@ def _schema_analysis(
         except (yaml.YAMLError, TypeError):
             return findings, "parse_error"
 
+    source_lines = source.splitlines()
+    key_lines: dict[str, int] = {}
+    seen_findings: set[tuple[str, int, str]] = set()
+
+    def add_schema_finding(rule_id: str, line: int, jurisdiction: str) -> None:
+        identity = (rule_id, line, jurisdiction)
+        if identity in seen_findings:
+            return
+        seen_findings.add(identity)
+        snippet = "\n".join(source_lines[max(0, line - 2): min(len(source_lines), line + 1)])
+        findings.append(build_finding(
+            rule_id,
+            file_path=file_path,
+            line_start=line,
+            line_end=line,
+            evidence=redact_evidence(snippet),
+            jurisdiction=jurisdiction,
+        ))
+
     def visit(value: Any, parent_key: str = "") -> None:
         if isinstance(value, dict):
             for key, child in value.items():
                 normalized = str(key)
-                line = _key_line(source, normalized)
-                if PERSONAL_RE.search(normalized):
+                is_personal = bool(PERSONAL_RE.search(normalized))
+                is_sensitive = bool(SENSITIVE_RE.search(normalized))
+                if is_personal or is_sensitive:
+                    if normalized not in key_lines:
+                        key_lines[normalized] = _key_line(source, normalized)
+                    line = key_lines[normalized]
+                if is_personal:
                     for jurisdiction in jurisdictions:
-                        findings.append(_finding("PRIVACY.PERSONAL_DATA_FIELD", file_path, source, _offset_for_line(source, line), _offset_for_line(source, line) + 1, jurisdiction))
-                if SENSITIVE_RE.search(normalized):
+                        add_schema_finding("PRIVACY.PERSONAL_DATA_FIELD", line, jurisdiction)
+                if is_sensitive:
                     for jurisdiction in jurisdictions:
-                        findings.append(_finding("PRIVACY.SENSITIVE_DATA_FIELD", file_path, source, _offset_for_line(source, line), _offset_for_line(source, line) + 1, jurisdiction))
+                        add_schema_finding("PRIVACY.SENSITIVE_DATA_FIELD", line, jurisdiction)
                 visit(child, normalized)
         elif isinstance(value, list):
             for child in value:
@@ -561,12 +585,6 @@ def _key_line(source: str, key: str) -> int:
     if not match:
         match = re.search(rf"['\"]{escaped}['\"]\s*:", source)
     return _line_for_offset(source, match.start()) if match else 1
-
-
-def _offset_for_line(source: str, line: int) -> int:
-    if line <= 1:
-        return 0
-    return sum(len(row) + 1 for row in source.splitlines()[:line - 1])
 
 
 def analyze_source_file(
