@@ -6,3 +6,4 @@ PyYAML>=6.0,<7
 tree-sitter-language-pack>=0.9,<1
 scikit-learn>=1.5,<2
 joblib>=1.4,<2
+pypdf>=6.0,<7
